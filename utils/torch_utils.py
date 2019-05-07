@@ -23,8 +23,8 @@ def iou_3d(boxes_a, boxes_b):
     zero = torch.zeros(1)
     if boxes_a.is_cuda:
         zero = zero.cuda()
-    overlaps = torch.max(torch.min(boxes_a[..., 3:], boxes_b[..., 3:])
-                         - torch.max(boxes_a[..., :3], boxes_b[..., :3]),
+    overlaps = torch.max(torch.min(boxes_a[..., 3:], boxes_b[..., 3:]) -
+                         torch.max(boxes_a[..., :3], boxes_b[..., :3]),
                          zero)  # [N,M,3]
     overlaps = torch.prod(overlaps, dim=-1)  # [N,M]
 
@@ -35,3 +35,15 @@ def iou_3d(boxes_a, boxes_b):
     # 计算iou
     iou = overlaps / (volumes_a + volumes_b - overlaps)
     return iou
+
+
+def main():
+    boxes_a = torch.Tensor([[1, 2, 3, 12, 32, 43], [1, 2, 3, 22, 42, 13]])
+    boxes_b = torch.Tensor([[6, 9, 9, 12, 32, 43], [1, 2, 3, 22, 42, 13]])
+
+    iou = iou_3d(boxes_a, boxes_b)
+    print("iou:{}".format(iou.numpy()))
+
+
+if __name__ == '__main__':
+    main()
