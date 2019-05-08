@@ -36,12 +36,11 @@ def regress_target_3d(anchors, gt_boxes):
     dy = (gt_center_y - center_y) / h
     dx = (gt_center_x - center_x) / w
     dz = (gt_center_z - center_z) / d
-    dh = np.log(gt_h / h)
-    dw = np.log(gt_w / w)
-    dd = np.log(gt_d / d)
+    dh = torch.log(gt_h / h)
+    dw = torch.log(gt_w / w)
+    dd = torch.log(gt_d / d)
 
-    target = np.stack([dy, dx, dz, dh, dw, dd], axis=1)
-    # target /= np.array([0.1, 0.1, 0.2, 0.2])
+    target = torch.stack([dy, dx, dz, dh, dw, dd], dim=1)
     return target
 
 
@@ -71,9 +70,9 @@ def apply_regress_3d(deltas, anchors):
     cx += dx * w
     cz += dz * d
     # 高度宽度深度调整
-    h *= np.exp(dh)
-    w *= np.exp(dw)
-    d *= np.exp(dd)
+    h *= torch.exp(dh)
+    w *= torch.exp(dw)
+    d *= torch.exp(dd)
 
     # 转为y1,x1,z1,y2,x2,z2
     y1 = cy - h * 0.5
@@ -83,7 +82,7 @@ def apply_regress_3d(deltas, anchors):
     x2 = cx + w * 0.5
     z2 = cz + w * 0.5
 
-    anchors_refined = np.stack([y1, x1, z1, y2, x2, z2], axis=1)
+    anchors_refined = torch.stack([y1, x1, z1, y2, x2, z2], dim=1)
     return anchors_refined
 
 
@@ -93,19 +92,11 @@ if __name__ == '__main__':
         anchors = torch.Tensor([[6, 9, 9, 12, 32, 43], [1, 2.2, 3, 22, 42, 13]])
         target = regress_target_3d(anchors, gt_boxes)
         print(target)
-        gt_boxes = np.array([[1.1, 2, 3, 12, 32, 43], [1, 2, 3, 22, 42, 13]])
-        anchors = np.array([[6, 9, 9, 12, 32, 43], [1, 2.2, 3, 22, 42, 13]])
-        target = regress_target_3d(anchors, gt_boxes)
-        print(target)
 
 
     def apply_regress_3d_test():
         deltas = torch.Tensor([[1.1, 2, 3, 12, 32, 43], [1, 2, 3, 22, 42, 13]])
         anchors = torch.Tensor([[6, 9, 9, 12, 32, 43], [1, 2.2, 3, 22, 42, 13]])
-        anchors_refined = apply_regress_3d(deltas, anchors)
-        print(anchors_refined)
-        deltas = np.array([[1.1, 2, 3, 12, 32, 43], [1, 2, 3, 22, 42, 13]])
-        anchors = np.array([[6, 9, 9, 12, 32, 43], [1, 2.2, 3, 22, 42, 13]])
         anchors_refined = apply_regress_3d(deltas, anchors)
         print(anchors_refined)
 
