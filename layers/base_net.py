@@ -49,6 +49,8 @@ class Net(nn.Module):
             nn.ConvTranspose3d(64, 64, kernel_size=2, stride=2),
             nn.BatchNorm3d(64),
             nn.ReLU(inplace=True))
+        # rpn head
+        self.conv = nn.Conv3d(15, self.num_anchors * 7, kernel_size=1)
         # dropout与output
         self.drop = nn.Dropout3d(p=0.5, inplace=False)
         self.output = nn.Sequential(nn.Conv3d(self.featureNum_back[0], 64, kernel_size=1),
@@ -62,7 +64,7 @@ class Net(nn.Module):
         :param num_blocks: num_blocks_forw 与 num_blocks_back
         :param indc: featureNum变量中channel的索引
         :param isDown: True or False 代表unet的特征提取部分还是上采样部分
-        :return: 
+        :return:
         """
         layers = []
         for i in range(num_blocks):
@@ -108,14 +110,9 @@ class Net(nn.Module):
         feature = self.drop(comb2)
         # 输出层
         out = self.output(feature)  # 128 -> 64
+        out = self.conv(out)
         size = out.size()  # [batch, channel, d, h, w]
-        # out层的维度reshape（待修改）
-        out = out.view(out.size(0), out.size(1), -1)
-        # transpose(1, 2)以修改为channel-last，reshape为每个锚点上anchors数量的分类、回归输出
-        out = out.transpose(1, 2).contiguous().view(size[0], size[2], size[3], size[4], self.num_anchors,
-                                                    5)  # out = out.transpose(1, 4).transpose(1, 2).transpose(2, 3).contiguous()
-        # 最终的reshape
-        out = out.view(-1, 5)
+        out = out.view(out.size(0), 7, size[2] * size[3] * size[4] * self.num_anchors)
 
         return out, feature
 
@@ -150,10 +147,10 @@ class PostRes(nn.Module):
         out = self.relu(out)
         return out
 
-
-# net = Net(3)
-# from torchsummary import summary
-# summary(net, (1, 32, 32, 32))
-# input = torch.randn(1, 1, 32, 32, 32)
-# out = net(input)
-# print(out)
+# if __name__=='__main__':
+#     net = Net(3)
+#     from torchsummary import summary
+#     summary(net, (1, 32, 32, 32))
+#     input = torch.randn(2, 1, 32, 32, 32)
+#     out = net(input)
+#     print(out[0].shape,out[1].shape)
