@@ -8,17 +8,19 @@
 
 import torch
 from torch import nn
-from config import current_config as cfg
 
 
 class Net(nn.Module):
-    def __init__(self):
+    def __init__(self, num_anchors):
         """
         删除coord参数与结构上coord的channels做torch.cat的res18+unet基网络
         """
         super(Net, self).__init__()
-        # The first few layers consumes the most memory, so use simple convolution to save memory.
-        # Call these layers preBlock, i.e., before the residual blocks of later layers.
+        self.num_anchors = num_anchors
+        num_blocks_forw = [2, 2, 3, 3]
+        num_blocks_back = [3, 3]
+        self.featureNum_forw = [24, 32, 64, 96, 96]  # 原[24, 32, 64, 64, 64]
+        self.featureNum_back = [128, 64, 96]  # 原[128, 64, 64]
         self.preBlock = nn.Sequential(
             nn.Conv3d(1, 24, kernel_size=3, padding=1),
             nn.BatchNorm3d(24),
@@ -26,39 +28,19 @@ class Net(nn.Module):
             nn.Conv3d(24, 24, kernel_size=3, padding=1),
             nn.BatchNorm3d(24),
             nn.ReLU(inplace=True))
-
-        # 3 poolings, each pooling downsamples the feature map by a factor 2.
-        # 3 groups of blocks. The first block of each group has one pooling.
-        num_blocks_forw = [2, 2, 3, 3]
-        num_blocks_back = [3, 3]
-        self.featureNum_forw = [24, 32, 64, 96, 96]  # 原[24, 32, 64, 64, 64]
-        self.featureNum_back = [128, 64, 96]  # 原[128, 64, 64]
-        for i in range(len(num_blocks_forw)):
-            blocks = []
-            for j in range(num_blocks_forw[i]):
-                if j == 0:
-                    blocks.append(PostRes(self.featureNum_forw[i], self.featureNum_forw[i + 1]))
-                else:
-                    blocks.append(PostRes(self.featureNum_forw[i + 1], self.featureNum_forw[i + 1]))
-            setattr(self, 'forw' + str(i + 1), nn.Sequential(*blocks))
-
-        for i in range(len(num_blocks_back)):
-            blocks = []
-            for j in range(num_blocks_back[i]):
-                if j == 0:
-                    blocks.append(PostRes(self.featureNum_back[i + 1] + self.featureNum_forw[i + 2],
-                                          self.featureNum_back[i]))
-                else:
-                    blocks.append(PostRes(self.featureNum_back[i], self.featureNum_back[i]))
-            setattr(self, 'back' + str(i + 2), nn.Sequential(*blocks))
-
+        # 修改的block layers
+        self.forw1 = self._make_layer(num_blocks_forw[0], 0, True)
+        self.forw2 = self._make_layer(num_blocks_forw[1], 1, True)
+        self.forw3 = self._make_layer(num_blocks_forw[2], 2, True)
+        self.forw4 = self._make_layer(num_blocks_forw[3], 3, True)
+        self.back3 = self._make_layer(num_blocks_back[1], 1, False)
+        self.back2 = self._make_layer(num_blocks_back[0], 0, False)
+        # pooling3d
         self.maxpool1 = nn.MaxPool3d(kernel_size=2, stride=2, return_indices=True)
         self.maxpool2 = nn.MaxPool3d(kernel_size=2, stride=2, return_indices=True)
         self.maxpool3 = nn.MaxPool3d(kernel_size=2, stride=2, return_indices=True)
         self.maxpool4 = nn.MaxPool3d(kernel_size=2, stride=2, return_indices=True)
-        # self.unmaxpool1 = nn.MaxUnpool3d(kernel_size=2, stride=2)
-        # self.unmaxpool2 = nn.MaxUnpool3d(kernel_size=2, stride=2)
-
+        # 上采样layer
         self.path1 = nn.Sequential(
             nn.ConvTranspose3d(96, 96, kernel_size=2, stride=2),
             nn.BatchNorm3d(96),
@@ -67,11 +49,36 @@ class Net(nn.Module):
             nn.ConvTranspose3d(64, 64, kernel_size=2, stride=2),
             nn.BatchNorm3d(64),
             nn.ReLU(inplace=True))
+        # dropout与output
         self.drop = nn.Dropout3d(p=0.5, inplace=False)
         self.output = nn.Sequential(nn.Conv3d(self.featureNum_back[0], 64, kernel_size=1),
                                     nn.ReLU(),
                                     # nn.Dropout3d(p = 0.3),
-                                    nn.Conv3d(64, 5 * len(cfg['anchors']), kernel_size=1))
+                                    nn.Conv3d(64, 5 * num_anchors, kernel_size=1))
+
+    def _make_layer(self, num_blocks, indc, isDown):
+        """
+        指定num_blocks数量的layers结构
+        :param num_blocks: num_blocks_forw 与 num_blocks_back
+        :param indc: featureNum变量中channel的索引
+        :param isDown: True or False 代表unet的特征提取部分还是上采样部分
+        :return: 
+        """
+        layers = []
+        for i in range(num_blocks):
+            if i == 0:
+                if isDown:
+                    layers.append(PostRes(self.featureNum_forw[indc], self.featureNum_forw[indc + 1]))
+                else:
+                    layers.append(PostRes(self.featureNum_back[indc + 1] + self.featureNum_forw[indc + 2],
+                                          self.featureNum_back[indc]))
+            else:
+                if isDown:
+                    layers.append(PostRes(self.featureNum_forw[indc + 1], self.featureNum_forw[indc + 1]))
+                else:
+                    layers.append(PostRes(self.featureNum_back[indc], self.featureNum_back[indc]))
+
+        return nn.Sequential(*layers)
 
     def forward(self, x):
         """
@@ -103,9 +110,10 @@ class Net(nn.Module):
         out = self.output(feature)  # 128 -> 64
         size = out.size()  # [batch, channel, d, h, w]
         # out层的维度reshape（待修改）
-        out = out.view(out.size(0), out.size(1),  -1)
+        out = out.view(out.size(0), out.size(1), -1)
         # transpose(1, 2)以修改为channel-last，reshape为每个锚点上anchors数量的分类、回归输出
-        out = out.transpose(1, 2).contiguous().view(size[0], size[2], size[3], size[4], len(cfg['anchors']), 5)  # out = out.transpose(1, 4).transpose(1, 2).transpose(2, 3).contiguous()
+        out = out.transpose(1, 2).contiguous().view(size[0], size[2], size[3], size[4], self.num_anchors,
+                                                    5)  # out = out.transpose(1, 4).transpose(1, 2).transpose(2, 3).contiguous()
         # 最终的reshape
         out = out.view(-1, 5)
 
@@ -141,3 +149,11 @@ class PostRes(nn.Module):
         out += residual
         out = self.relu(out)
         return out
+
+
+# net = Net(3)
+# from torchsummary import summary
+# summary(net, (1, 32, 32, 32))
+# input = torch.randn(1, 1, 32, 32, 32)
+# out = net(input)
+# print(out)
