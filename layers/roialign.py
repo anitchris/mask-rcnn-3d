@@ -17,6 +17,7 @@ class RoiAlign(nn.Module):
         self.pool_size_w = pool_size_w
         self.pool_size_t = pool_size_t
         self.image_size = image_size
+        super(RoiAlign, self).__init__()
 
     def forward(self, features, rois):
         """
