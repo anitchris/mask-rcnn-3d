@@ -6,7 +6,6 @@
 @description:
 """
 import torch
-import numpy as np
 
 
 def regress_target_3d(anchors, gt_boxes):
@@ -40,7 +39,7 @@ def regress_target_3d(anchors, gt_boxes):
     dw = torch.log(gt_w / w)
     dd = torch.log(gt_d / d)
 
-    target = torch.stack([dy, dx, dz, dh, dw, dd], dim=1)
+    target = torch.stack((dy, dx, dz, dh, dw, dd), dim=1)
     return target
 
 
@@ -82,7 +81,7 @@ def apply_regress_3d(deltas, anchors):
     x2 = cx + w * 0.5
     z2 = cz + w * 0.5
 
-    anchors_refined = torch.stack([y1, x1, z1, y2, x2, z2], dim=1)
+    anchors_refined = torch.stack((y1, x1, z1, y2, x2, z2), dim=1)
     return anchors_refined
 
 
@@ -99,6 +98,7 @@ if __name__ == '__main__':
         anchors = torch.Tensor([[6, 9, 9, 12, 32, 43], [1, 2.2, 3, 22, 42, 13]])
         anchors_refined = apply_regress_3d(deltas, anchors)
         print(anchors_refined)
+
 
     regress_target_3d_test()
     apply_regress_3d_test()
