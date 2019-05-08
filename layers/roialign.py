@@ -24,7 +24,7 @@ class RoiAlign(nn.Module):
         :param: features [batch,C,H,W,T]
         :param: rois [roi_num,(y1,x1,z1,y2,x2,z2,batch_index)]
         :return: 池化后的特征  [roi_num,C,ph,pw,pt]
-        
+
         """
         # 坐标归一化
         boxes = rois[:, :6] / self.image_size
