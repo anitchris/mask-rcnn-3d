@@ -39,7 +39,7 @@ def iou_3d(boxes_a, boxes_b):
 
 def main():
     boxes_a = torch.Tensor([[1, 2, 3, 12, 32, 43], [1, 2, 3, 22, 42, 13]])
-    boxes_b = torch.Tensor([[6, 9, 9, 12, 32, 43], [1, 2, 3, 22, 42, 13]])
+    boxes_b = torch.Tensor([[6, 9, 9, 12, 32, 43], [1, 2, 3, 22, 42, 13], [22, 22, 23, 42, 42, 63]])
 
     iou = iou_3d(boxes_a, boxes_b)
     print("iou:{}".format(iou.numpy()))
