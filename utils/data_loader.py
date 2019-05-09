@@ -61,9 +61,9 @@ class Data3Lung(Dataset):  # Dataset是一个包装类，用来将数据包装�
         :param idx: 患者索引（在该患者的3Dimg基础上做patch的crop操作，作为进入网络的图片样本）
         :return: 
         """
-        # 样本采样情况（先按照imgs的长度，把所有目标按target_box做crop，然后再按目标为空随机crop）
-        if self.phase !='test':
-            if idx>=len(self.imgs):
+        # 1个epoch样本采样情况（先imgs的长度*1个样本，把所有目标按target_box做crop，然后imgs的长度*1个样本，按照空目标做随机crop）
+        if self.phase != 'test':
+            if idx >= len(self.imgs):
                 is_random = True
                 idx = idx % len(self.imgs)
             else:
@@ -82,7 +82,8 @@ class Data3Lung(Dataset):  # Dataset是一个包装类，用来将数据包装�
             # crop得到样本
             sample, sam_mask, sam_gt = self.crop(img, mask, gt)  # 完全的torch.tensor处理过程（待完成）
             # augment先不管
-            return torch.from_numpy(sample.astype(np.float32)), torch.from_numpy(sam_mask.astype(np.float32)), torch.from_numpy(sam_gt.astype(np.float32))
+            return torch.from_numpy(sample.astype(np.float32)), torch.from_numpy(
+                sam_mask.astype(np.float32)), torch.from_numpy(sam_gt.astype(np.float32))
         else:  # 测试阶段（待完成）
             img = self.imgs[idx]
             mask = self.masks[idx]
@@ -91,10 +92,10 @@ class Data3Lung(Dataset):  # Dataset是一个包装类，用来将数据包装�
             imgs = 0
             return imgs
 
-    def __len__(self):  # len方法提供了dataset的大小（待修改）
+    def __len__(self):  # len方法提供了dataset的大小，可用于指定1个epoch中idx遍历的长度
         if self.phase == 'train':
-            return len(self.imgs)
-        elif self.phase =='val':
+            return 2 * len(self.imgs)
+        elif self.phase == 'val':
             return len(self.imgs)
         else:
             return len(self.imgs)
@@ -108,23 +109,31 @@ class Crop(object):
         self.stride = config.STRIDE
         self.pad_value = config.PAD_VALUE
         super(Crop, self).__init__()
+
     def __call__(self, img, mask, gt):
         """
         注：1位患者只有1个target_box
-        :param img: 3d 图像 [30, 512, 512]
-        :param mask: 3d mask [30, 512, 512]
-        :param gt: 3d cube [6,]
+        :param img: 3d 图像 [30, 512, 512] (z,y,x)
+        :param mask: 3d mask [30, 512, 512] (z,y,x)
+        :param gt: 3d cube [6,]->(y1,x1,z1,y2,x2,z2)
         :return: 
+        patch_img: [batch, 1, 128, 128, 128] (batch,channel,z,y,x)
+        patch_mask: [batch, 1, 128, 128, 128] (batch,channel,z,y,x)
+        target_box: [batch, 6] (batch,y1,x1,z1,y2,x2,z2)
         """
         # gt中(y1,x1,z1,y2,x2,z2)表示转(y,x,z,diameter)
         crop_size = np.array(self.crop_size)
         bound_size = self.bound_size
         target_box = np.copy(gt)
-        if target_box.any() :
-            target_box = np.array([np.mean([target_box[0],target_box[3]]), np.mean([target_box[1],target_box[4]]), np.mean([target_box[2],target_box[5]]),
-                                   np.max([target_box[3]-target_box[0], target_box[4]-target_box[1], target_box[5]-target_box[2]])])
+        if target_box.any():
+            target_box = np.array([np.mean([target_box[0], target_box[3]]), np.mean([target_box[1], target_box[4]]),
+                                   np.mean([target_box[2], target_box[5]]),
+                                   np.max([target_box[3] - target_box[0], target_box[4] - target_box[1],
+                                           target_box[5] - target_box[2]])])
         else:
             target_box = np.array([np.nan, np.nan, np.nan, np.nan])
+        # (y,x,z,diameter)顺序转(z,y,x,diameter)
+        target_box = np.array([target_box[2], target_box[0], target_box[1], target_box[3]])
         # 根据target_box是否为空，寻找采样边界与随机采样点
         if not np.isnan(target_box).any():  # 以target为中心的采样边界
             radius = target_box[3] / 2
@@ -134,7 +143,8 @@ class Crop(object):
             border = np.stack((start, end), axis=-1)
             # 根据target_box采样时，如果start <= end以target_box中心点为中心采样，否则在（end，start）区域内随机
             point = np.array([
-                int(target_box[i]) - int(crop_size[i] / 2) + np.random.randint(int(-bound_size / 2), int(bound_size / 2))
+                int(target_box[i]) - int(crop_size[i] / 2) + np.random.randint(int(-bound_size / 2),
+                                                                               int(bound_size / 2))
                 if border[i][0] <= border[i][1] else np.random.randint(min(border[i][0], border[i][1]),
                                                                        max(border[i][0], border[i][1])) for i in
                 range(len(border))])
@@ -155,27 +165,28 @@ class Crop(object):
         padding = np.stack((left_pad, right_pad), axis=-1)
         # 新增batch维度的全零padding初始化
         padding = np.concatenate([np.array([[0, 0]]), padding], axis=0)
-        img = img[np.newaxis,...]
-        mask = mask[np.newaxis,...]
+        img = img[np.newaxis, ...]
+        mask = mask[np.newaxis, ...]
         # crop与padding得到patch_img与patch_mask
         patch_img = img[:,
                     max(point[0], 0):min(point[0] + crop_size[0], img.shape[1]),
                     max(point[1], 0):min(point[1] + crop_size[1], img.shape[2]),
                     max(point[2], 0):min(point[2] + crop_size[2], img.shape[3])]
         patch_mask = mask[:,
-                     max(point[0], 0):min(point[0] + crop_size[0], img.shape[1]),
-                     max(point[1], 0):min(point[1] + crop_size[1], img.shape[2]),
-                     max(point[2], 0):min(point[2] + crop_size[2], img.shape[3])]
+                     max(point[0], 0):min(point[0] + crop_size[0], mask.shape[1]),
+                     max(point[1], 0):min(point[1] + crop_size[1], mask.shape[2]),
+                     max(point[2], 0):min(point[2] + crop_size[2], mask.shape[3])]
         # 维度需要匹配
         patch_img = np.pad(patch_img, padding, 'constant', constant_values=self.pad_value)
         patch_mask = np.pad(patch_mask, padding, 'constant', constant_values=self.pad_value)
         # 相对坐标变换得到target_box
         target_box[:3] = target_box[:3] - point
-        # (y,x,z,diameter)还原为(y1,x1,z1,y2,x2,z2)
-        target_box = np.array([target_box[0] - target_box[3] / 2, target_box[1] - target_box[3] / 2, target_box[2]-target_box[3] / 2,
-                               target_box[0] + target_box[3] / 2, target_box[1] + target_box[3] / 2,
-                               target_box[2] + target_box[3] / 2])
-        return  patch_img, patch_mask, target_box
+        # (z,y,x,diameter)还原为(y1,x1,z1,y2,x2,z2)
+        target_box = np.array(
+            [target_box[1] - target_box[3] / 2, target_box[2] - target_box[3] / 2, target_box[0] - target_box[3] / 2,
+             target_box[1] + target_box[3] / 2, target_box[2] + target_box[3] / 2,
+             target_box[0] + target_box[3] / 2])
+        return patch_img, patch_mask, target_box
 
 
 def main():
@@ -205,7 +216,8 @@ def main():
             # 将这些数据转换成Variable类型
             inputs, masks, gts = Variable(inputs), Variable(masks), Variable(gts)
             # 接下来就是训练环节，这里使用print来代替
-            print("epoch：", epoch, "的第", i, "个inputs", inputs.data.size(), "masks", masks.data.size(), "gts", gts.data.size())
+            print("epoch：", epoch, "的第", i, "个inputs", inputs.data.size(), "masks", masks.data.size(), "gts",
+                  gts.data.size())
 
 
 if __name__ == '__main__':
