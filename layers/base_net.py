@@ -49,14 +49,9 @@ class Net(nn.Module):
             nn.ConvTranspose3d(64, 64, kernel_size=2, stride=2),
             nn.BatchNorm3d(64),
             nn.ReLU(inplace=True))
-        # rpn head
-        self.conv = nn.Conv3d(15, self.num_anchors * 7, kernel_size=1)
-        # dropout与output
+
+        # dropout
         self.drop = nn.Dropout3d(p=0.5, inplace=False)
-        self.output = nn.Sequential(nn.Conv3d(self.featureNum_back[0], 64, kernel_size=1),
-                                    nn.ReLU(),
-                                    # nn.Dropout3d(p = 0.3),
-                                    nn.Conv3d(64, 5 * num_anchors, kernel_size=1))
 
     def _make_layer(self, num_blocks, indc, isDown):
         """
@@ -108,13 +103,8 @@ class Net(nn.Module):
         comb2 = self.back2(torch.cat((rev2, out2), 1))  # 64+64 -> back后的128
         # rpn_head的基feature_map
         feature = self.drop(comb2)
-        # 输出层
-        out = self.output(feature)  # 128 -> 64
-        out = self.conv(out)
-        size = out.size()  # [batch, channel, d, h, w]
-        out = out.view(out.size(0), 7, size[2] * size[3] * size[4] * self.num_anchors)
 
-        return out, feature
+        return feature
 
 
 class PostRes(nn.Module):
@@ -147,10 +137,12 @@ class PostRes(nn.Module):
         out = self.relu(out)
         return out
 
-# if __name__=='__main__':
+
+# if __name__ == '__main__':
 #     net = Net(3)
 #     from torchsummary import summary
+#
 #     summary(net, (1, 32, 32, 32))
 #     input = torch.randn(2, 1, 32, 32, 32)
 #     out = net(input)
-#     print(out[0].shape,out[1].shape)
+#     print(out[0].shape, out[1].shape)
