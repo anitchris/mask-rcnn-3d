@@ -8,7 +8,7 @@
 from torch import nn
 
 
-class MaskHead(nn.Module):
+class MrcnnHead(nn.Module):
     def __init__(self, in_channel, kernel_size, num_classes):
         """
         构造函数
@@ -16,7 +16,7 @@ class MaskHead(nn.Module):
         :param kernel_size: int or tuple, 卷积核尺寸
         :param num_classes: int, 类别数
         """
-        super(MaskHead, self).__init__()
+        super(MrcnnHead, self).__init__()
         self.in_channel = in_channel
         self.kernel_size = kernel_size
         self.num_classes = num_classes
