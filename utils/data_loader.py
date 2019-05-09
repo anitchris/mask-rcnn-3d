@@ -14,7 +14,7 @@ from torch.nn import DataParallel
 from torch.autograd import Variable
 from torch.utils.data import Dataset
 from torch.utils.data import DataLoader
-from config import current_config as cfg
+from config import cur_config as cfg
 
 
 class Data3Lung(Dataset):  # Dataset是一个包装类，用来将数据包装为Dataset类，方便传入DataLoader中（getitem与len方法一般不可少）
