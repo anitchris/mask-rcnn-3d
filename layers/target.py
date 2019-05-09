@@ -96,7 +96,7 @@ class MrcnnTarget(nn.Module):
         :param gt_labels: list of numpy [n]
 
         :return: rois: tensor [rois_num,(y1,x1,z1,y2,x2,z2)]
-        :return: deltas: tensor [rois_num,(y1,x1,z1,y2,x2,z2)]
+        :return: deltas: tensor [rois_num,(dy,dx,dz,dh,dw,dd)]
         :return: labels: tensor [rois_num,(y1,x1,z1,y2,x2,z2)]
         :return: rois_indices: tensor [rois_num] roi在原始的mini-batch中的索引号;roiAlign时用到
         :return: rois_tag: tensor [rois_num]  1-正样本，-1-负样本
