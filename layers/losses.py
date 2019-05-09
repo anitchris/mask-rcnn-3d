@@ -63,12 +63,28 @@ def mrcnn_regress_loss(rois_deltas, predict_deltas, rois_labels):
     :return:
     """
     # 只有正样本计算损失
-    ix = (rois_labels > 0).nonzero()
+    ix = (rois_labels > 0).nonzero()[:, 0]  # [pos_rois_num]
     rois_deltas = rois_deltas[ix]
     predict_deltas = predict_deltas[ix]
     loss = F.smooth_l1_loss(predict_deltas, rois_deltas)  # 标量
     return loss
 
 
-def mrcnn_mask_loss():
-    pass
+def mrcnn_mask_loss(mask, predict_mask_logits, rois_labels):
+    """
+    mrcnn mask损失
+    :param mask: 真实的 mask[rois_num,y,x,z] 0,1值
+    :param predict_mask_logits:  [rois_num,y,x,z,num_classes]
+    :param rois_labels:真实的类别[rois_num]
+    :return:
+    """
+    predict_mask = F.softmax(predict_mask_logits, dim=-1)  # 转为得分
+    # 只处正样本区域
+    ix = (rois_labels > 0).nonzero()[:, 0]  # [pos_rois_num]
+
+    rois_labels = rois_labels[ix]
+    predict_mask = predict_mask[ix, rois_labels]  # 对应的样本，对应的类别预测的mask值
+    mask = mask[ix]
+
+    loss = F.binary_cross_entropy(predict_mask, mask)
+    return loss
