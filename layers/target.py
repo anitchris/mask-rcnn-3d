@@ -85,6 +85,7 @@ class MrcnnTarget(nn.Module):
         self.train_rois_per_image = train_rois_per_image
         self.positive_iou_threshold = positive_iou_threshold
         self.negative_iou_threshold = negative_iou_threshold
+        self.positive_ratio = positive_ratio
 
     def forward(self, proposals, batch_indices, gt_boxes, gt_labels):
         """
