@@ -6,6 +6,7 @@
    Date：          2019/5/9
 """
 import torch.nn.functional as F
+from utils import torch_utils
 
 
 def rpn_cls_loss(anchors_tag, predict_logits):
@@ -39,8 +40,18 @@ def rpn_regress_loss(deltas, predict_deltas, anchors_tag):
     return loss
 
 
-def mrcnn_cls_loss():
-    pass
+def mrcnn_cls_loss(rois_labels, predict_logits):
+    """
+
+    :param rois_labels: [rois_num]
+    :param predict_logits: [rois_num,num_classes]
+    :return:
+    """
+    # 转one hot编码
+    num_classes = predict_logits.size(1)
+    labels = torch_utils.one_hot(rois_labels, num_classes)
+    loss = F.cross_entropy(predict_logits, labels)  # 标量
+    return loss
 
 
 def mrcnn_regress_loss():
