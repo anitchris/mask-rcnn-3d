@@ -31,9 +31,9 @@ class Data3Lung(Dataset):  # Dataset是一个包装类，用来将数据包装�
         if phase != 'test':
             idcs = os.listdir(os.path.join(data_dir, 'img'))
         # 路径
-        self.img_file = [os.path.join(data_dir, 'img', '%s', '%s.npy' % idx) for idx in idcs]
-        self.mask_file = [os.path.join(data_dir, 'mask', '%s', '%s.npy' % idx) for idx in idcs]
-        self.gt_file = [os.path.join(data_dir, 'gt', '%s', '%s.npy' % idx) for idx in idcs]
+        self.img_file = [os.path.join(data_dir, 'img', '%s' % idx, '%s.npy' % idx) for idx in idcs]
+        self.mask_file = [os.path.join(data_dir, 'mask', '%s' % idx, '%s.npy' % idx) for idx in idcs]
+        self.gt_file = [os.path.join(data_dir, 'gt', '%s' % idx, '%s.npy' % idx) for idx in idcs]
         # 数组
         imgs, masks, gts = [], [], []
         for i in range(len(idcs)):
@@ -51,7 +51,7 @@ class Data3Lung(Dataset):  # Dataset是一个包装类，用来将数据包装�
         self.imgs = np.array(imgs)
         self.masks = np.array(masks)
         self.gts = np.array(gts)
-        self.isRandomImg = False  # 随机患者or指定患者
+        self.is_random_img = False  # 随机患者or指定患者
         # 先创建crop对象作为self变量
         self.crop = Crop(config)
 
@@ -61,24 +61,34 @@ class Data3Lung(Dataset):  # Dataset是一个包装类，用来将数据包装�
         :param idx: 患者索引（在该患者的3Dimg基础上做patch的crop操作，作为进入网络的图片样本）
         :return: 
         """
+        # 样本采样情况（先按照imgs的长度，把所有目标按target_box做crop，然后再按目标为空随机crop）
+        if self.phase !='test':
+            if idx>=len(self.imgs):
+                is_random = True
+                idx = idx % len(self.imgs)
+            else:
+                is_random = False
+        else:
+            is_random = False
+        # crop部分
         if self.phase != 'test':  # 训练/验证阶段
-            if self.isRandomImg:
+            if self.is_random_img:
                 rand_id = np.random.randint(len(self.imgs))
             else:
                 rand_id = idx
             img = self.imgs[rand_id]
             mask = self.masks[rand_id]
-            gt = self.gts[rand_id]
+            gt = self.gts[rand_id] if not is_random else []
             # crop得到样本
-            samples, sam_masks, sam_gts = self.crop(img, mask, gt)  # 完全的torch.tensor处理过程（待完成）
+            sample, sam_mask, sam_gt = self.crop(img, mask, gt)  # 完全的torch.tensor处理过程（待完成）
             # augment先不管
-            return torch.from_numpy(samples), torch.from_numpy(sam_masks), torch.from_numpy(sam_gts)
+            return torch.from_numpy(sample.astype(np.float32)), torch.from_numpy(sam_mask.astype(np.float32)), torch.from_numpy(sam_gt.astype(np.float32))
         else:  # 测试阶段（待完成）
             img = self.imgs[idx]
             mask = self.masks[idx]
             gt = self.gts[idx]
             # 测试阶段的的data_loader，不返回patch，返回完整的imgs
-            imgs =
+            imgs = 0
             return imgs
 
     def __len__(self):  # len方法提供了dataset的大小（待修改）
@@ -93,14 +103,14 @@ class Data3Lung(Dataset):  # Dataset是一个包装类，用来将数据包装�
 # crop操作类
 class Crop(object):
     def __init__(self, config):
-        self.crop_size = config.crop_size
-        self.bound_size = config.bound_size
-        self.stride = config.stride
-        self.pad_value = config.pad_value
+        self.crop_size = config.CROP_SIZE
+        self.bound_size = config.BOUND_SIZE
+        self.stride = config.STRIDE
+        self.pad_value = config.PAD_VALUE
         super(Crop, self).__init__()
     def __call__(self, img, mask, gt):
         """
-        注：1位患者只有1个target_box（先用numpy）
+        注：1位患者只有1个target_box
         :param img: 3d 图像 [30, 512, 512]
         :param mask: 3d mask [30, 512, 512]
         :param gt: 3d cube [6,]
@@ -110,10 +120,13 @@ class Crop(object):
         crop_size = np.array(self.crop_size)
         bound_size = self.bound_size
         target_box = np.copy(gt)
-        target_box = np.array([np.mean([target_box[0],target_box[3]]), np.mean([target_box[1],target_box[4]]), np.mean([target_box[2],target_box[5]]),
-                               np.max(target_box[3]-target_box[0], target_box[4]-target_box[1], target_box[5]-target_box[2])])
+        if target_box.any() :
+            target_box = np.array([np.mean([target_box[0],target_box[3]]), np.mean([target_box[1],target_box[4]]), np.mean([target_box[2],target_box[5]]),
+                                   np.max([target_box[3]-target_box[0], target_box[4]-target_box[1], target_box[5]-target_box[2]])])
+        else:
+            target_box = np.array([np.nan, np.nan, np.nan, np.nan])
         # 根据target_box是否为空，寻找采样边界与随机采样点
-        if target_box.any():  # 以target为中心的采样边界
+        if not np.isnan(target_box).any():  # 以target为中心的采样边界
             radius = target_box[3] / 2
             start = np.floor(np.array([target_box[:3] - radius], dtype='float32'))[0] + 1 - bound_size
             end = np.ceil(np.array([target_box[:3] + radius], dtype='float32'))[0] + 1 + bound_size - crop_size
@@ -121,7 +134,7 @@ class Crop(object):
             border = np.stack((start, end), axis=-1)
             # 根据target_box采样时，如果start <= end以target_box中心点为中心采样，否则在（end，start）区域内随机
             point = np.array([
-                int(target_box[i]) - crop_size[i] / 2 + np.random.randint(int(-bound_size / 2), int(bound_size / 2))
+                int(target_box[i]) - int(crop_size[i] / 2) + np.random.randint(int(-bound_size / 2), int(bound_size / 2))
                 if border[i][0] <= border[i][1] else np.random.randint(min(border[i][0], border[i][1]),
                                                                        max(border[i][0], border[i][1])) for i in
                 range(len(border))])
@@ -142,21 +155,26 @@ class Crop(object):
         padding = np.stack((left_pad, right_pad), axis=-1)
         # 新增batch维度的全零padding初始化
         padding = np.concatenate([np.array([[0, 0]]), padding], axis=0)
+        img = img[np.newaxis,...]
+        mask = mask[np.newaxis,...]
         # crop与padding得到patch_img与patch_mask
-        patch_img = img[
-                    max(point[0], 0):min(point[0] + crop_size[0], img.shape[0]),
-                    max(point[1], 0):min(point[1] + crop_size[1], img.shape[1]),
-                    max(point[2], 0):min(point[2] + crop_size[2], img.shape[2])]
-        patch_mask = mask[
-                     max(point[0], 0):min(point[0] + crop_size[0], img.shape[0]),
-                     max(point[1], 0):min(point[1] + crop_size[1], img.shape[1]),
-                     max(point[2], 0):min(point[2] + crop_size[2], img.shape[2])]
+        patch_img = img[:,
+                    max(point[0], 0):min(point[0] + crop_size[0], img.shape[1]),
+                    max(point[1], 0):min(point[1] + crop_size[1], img.shape[2]),
+                    max(point[2], 0):min(point[2] + crop_size[2], img.shape[3])]
+        patch_mask = mask[:,
+                     max(point[0], 0):min(point[0] + crop_size[0], img.shape[1]),
+                     max(point[1], 0):min(point[1] + crop_size[1], img.shape[2]),
+                     max(point[2], 0):min(point[2] + crop_size[2], img.shape[3])]
+        # 维度需要匹配
         patch_img = np.pad(patch_img, padding, 'constant', constant_values=self.pad_value)
         patch_mask = np.pad(patch_mask, padding, 'constant', constant_values=self.pad_value)
         # 相对坐标变换得到target_box
         target_box[:3] = target_box[:3] - point
-        # (y,x,z,diameter)还原(y1,x1,z1,y2,x2,z2)
-
+        # (y,x,z,diameter)还原为(y1,x1,z1,y2,x2,z2)
+        target_box = np.array([target_box[0] - target_box[3] / 2, target_box[1] - target_box[3] / 2, target_box[2]-target_box[3] / 2,
+                               target_box[0] + target_box[3] / 2, target_box[1] + target_box[3] / 2,
+                               target_box[2] + target_box[3] / 2])
         return  patch_img, patch_mask, target_box
 
 
@@ -165,7 +183,7 @@ def main():
     测试类
     :return: 
     """
-    data_dir = r'C:/'
+    data_dir = r'F:\迅雷下载\dicom文件-标记文件\subset'
     # 数据包装
     dataset = Data3Lung(
         data_dir,
@@ -174,10 +192,10 @@ def main():
     # 传入DataLoader
     train_loader = DataLoader(
         dataset,
-        batch_size=4,
+        batch_size=1,
         shuffle=True,
-        num_workers=2,  # 使用几个子进程
-        collate_fn=lambda x:x,  # 取样本的方式可自定义（稍微复杂难理解一点）
+        num_workers=0,  # 使用几个子进程
+        # collate_fn=lambda x:x,  # 取样本的方式可自定义（稍微复杂难理解一点）
         pin_memory=False)  # 是否将tensors拷贝到CUDA中的固定内存
     # 3个epochs的输出测试
     for epoch in range(3):
