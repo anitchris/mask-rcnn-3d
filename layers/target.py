@@ -107,7 +107,7 @@ class MrcnnTarget(nn.Module):
         # 逐个样本处理
         for i in range(len(gt_boxes)):
             # gt to gpu
-            boxes = torch.from_numpy(gt_boxes[i]).cuda()
+            boxes = torch.from_numpy(gt_boxes[i]).float().cuda()
             labels = torch.from_numpy(gt_labels[i]).cuda()
             # 属于第i个样本的proposals
             roi_indices = (batch_indices == i).nonzero()[:, 0]  # 索引
