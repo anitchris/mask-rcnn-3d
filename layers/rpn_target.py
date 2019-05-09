@@ -21,15 +21,15 @@ def rpn_targets_graph(gt_boxes, anchors, rpn_train_anchors=None):
 
     # compute iou matrix
     iou = iou_3d(gt_boxes,anchors)
-
     # set positive anchor if iou>0.7
     pos_iou = torch.where(iou>=pos_iou_thresh,torch.ones_like(iou),torch.zeros_like(iou))
     anchor_sign_pos = torch.max(pos_iou,dim=0)[0]
-    # set positive anchor if it has biggest iou with gt
-    row_max = torch.argmax(iou,dim=1)
-    anchor_sign_pos[row_max] = 1
 
+    # set postive anchor if it has biggest iou with gt
+    row_max = torch.argmax(iou,dim=1,keepdim=True)
+    anchor_sign_pos[]
 
+    #print(iou[col_max])
 
     # set negtive anchor if iou<0.3
 
@@ -41,6 +41,6 @@ def rpn_targets_graph(gt_boxes, anchors, rpn_train_anchors=None):
 
 
 gt_boxes = torch.Tensor([[1.1, 2, 3, 12, 32, 43], [1, 2, 3, 22, 42, 13]])
-anchors = torch.Tensor([[6, 9, 9, 12, 32, 43], [1, 2.2, 3, 22, 42, 13], [1, 2.2, 3, 22, 42, 33],[1, 2.2, 3, 22, 42, 43]])
+anchors = torch.Tensor([[6, 9, 9, 12, 32, 43], [1, 2.2, 3, 22, 42, 13], [1, 2.2, 3, 22, 42, 33]])
 rpn_train_anchors = 2
 rpn_targets_graph(gt_boxes, anchors, rpn_train_anchors)
