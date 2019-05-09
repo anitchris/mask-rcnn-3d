@@ -38,6 +38,7 @@ class RpnTarget(nn.Module):
         batch_deltas = []
         # 逐个样本处理
         for boxes, labels in zip(gt_boxes, gt_labels):
+            boxes = np.expand_dims(boxes, axis=0)
             iou = iou_3d(boxes, anchors)  # [gt_num,anchors_num]
             anchors_iou_max = np.max(iou, axis=0)  # [anchors_num]
             anchors_tag = np.zeros_like(anchors[:, 0], np.int)  # [anchors_num]
@@ -46,12 +47,15 @@ class RpnTarget(nn.Module):
             neg_indices = np.where(anchors_iou_max <= self.negative_iou_threshold)[0]
             # 正样本采样
             pos_num = min(pos_indices.shape[0], self.train_positive_anchors)
-            pos_indices = np.random.shuffle(pos_indices)[:pos_num]
+            np.random.shuffle(pos_indices)
+            pos_indices = pos_indices[:pos_num]
             anchors_tag[pos_indices] = 1
             # 负样本采样
             neg_num = min(neg_indices.shape[0], self.train_anchors_per_image - pos_num)
-            neg_indices = np.random.shuffle(neg_indices)[:neg_num]
-            anchors[neg_indices] = -1
+            np.random.shuffle(neg_indices)
+            neg_indices = neg_indices[:neg_num]
+            print(pos_indices, neg_indices)
+            anchors_tag[neg_indices] = -1
 
             # 计算回归目标
             anchors_iou_argmax = np.argmax(iou, axis=0)  # [anchors_num]
