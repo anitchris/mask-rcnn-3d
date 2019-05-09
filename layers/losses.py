@@ -42,7 +42,7 @@ def rpn_regress_loss(deltas, predict_deltas, anchors_tag):
 
 def mrcnn_cls_loss(rois_labels, predict_logits):
     """
-
+    mrcnn 分类损失
     :param rois_labels: [rois_num]
     :param predict_logits: [rois_num,num_classes]
     :return:
@@ -54,8 +54,20 @@ def mrcnn_cls_loss(rois_labels, predict_logits):
     return loss
 
 
-def mrcnn_regress_loss():
-    pass
+def mrcnn_regress_loss(rois_deltas, predict_deltas, rois_labels):
+    """
+    mrcnn 回归损失
+    :param rois_deltas:[rois_num,(dy,dx,dz,dh,dw,dd)]
+    :param predict_deltas:[rois_num,(dy,dx,dz,dh,dw,dd)]
+    :param rois_labels:[rois_num]
+    :return:
+    """
+    # 只有正样本计算损失
+    ix = (rois_labels > 0).nonzero()
+    rois_deltas = rois_deltas[ix]
+    predict_deltas = predict_deltas[ix]
+    loss = F.smooth_l1_loss(predict_deltas, rois_deltas)  # 标量
+    return loss
 
 
 def mrcnn_mask_loss():
