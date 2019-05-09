@@ -25,7 +25,11 @@ class Proposal(nn.Module):
         :param anchors: [anchors_num,(y1,x1,z1,y2,x2,z2)]
         :param predict_scores: [batch,anchors_num]
         :param predict_deltas: [batch,anchors_num,(dx,dy,dz,dh,dw,dd)]
-        :return:
+
+        :return: batch_proposals: proposals边框坐标[proposals_num,(y1,x1,z1,y2,x2,z2)]
+        :return: batch_scores: proposals边框得分[proposals_num]
+        :return: batch_indices: 指向之前属于哪个样本[proposals_num]
+        注意返回结果没有之前的batch 维度了
         """
         batch_proposals = []
         batch_scores = []
@@ -51,7 +55,7 @@ class Proposal(nn.Module):
             batch_proposals.append(keep[:, :-1])
             batch_scores.append(keep[:, -1])
 
-        # 在batch上打平
+        # 在batch上打平，之前的batch_size维度没有了
         batch_proposals = torch.cat(batch_proposals, dim=0)
         batch_scores = torch.cat(batch_scores, dim=0)
         batch_indices = torch.cat(batch_indices, dim=0)
