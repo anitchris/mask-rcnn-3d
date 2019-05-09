@@ -99,13 +99,11 @@ class MrcnnTarget(nn.Module):
         :return: deltas: tensor [rois_num,(dy,dx,dz,dh,dw,dd)]
         :return: labels: tensor [rois_num,(y1,x1,z1,y2,x2,z2)]
         :return: rois_indices: tensor [rois_num] roi在原始的mini-batch中的索引号;roiAlign时用到
-        :return: rois_tag: tensor [rois_num]  1-正样本，-1-负样本
         """
         batch_rois = []
         batch_deltas = []
         batch_labels = []
         batch_rois_indices = []
-        batch_rois_tag = []
         # 逐个样本处理
         for i in range(len(gt_boxes)):
             # gt to gpu
@@ -142,8 +140,7 @@ class MrcnnTarget(nn.Module):
             # 计算回归目标
             deltas = torch_utils.regress_target_3d(rois, boxes)
 
-            # 生成roi_tag,新的batch_indices
-            batch_rois_tag.append(torch.Tensor([1] * pos_num + [-1] * neg_num).cuda())
+            # 新的batch_indices
             batch_rois_indices.append(torch.Tensor([i] * (pos_num + neg_num)).cuda())
 
             # 添加rois,deltas,labels
@@ -155,7 +152,6 @@ class MrcnnTarget(nn.Module):
         batch_rois = torch.cat(batch_rois, dim=0)
         batch_deltas = torch.cat(batch_deltas, dim=0)
         batch_labels = torch.cat(batch_labels, dim=0)
-        batch_rois_tag = torch.cat(batch_rois_tag, dim=0)
         batch_rois_indices = torch.cat(batch_rois_indices, dim=0)
 
-        return batch_rois, batch_deltas, batch_labels, batch_rois_tag, batch_rois_indices
+        return batch_rois, batch_deltas, batch_labels, batch_rois_indices
