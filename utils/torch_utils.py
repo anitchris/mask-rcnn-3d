@@ -126,6 +126,20 @@ def shuffle_and_select(tensor, select_num):
     return tensor[indices][:select_num]
 
 
+def one_hot(indices, depth):
+    """
+    转为onehot编码
+    :param indices: 一维张量[n]
+    :param depth: 类别数
+    :return:
+    """
+    ix = indices.clone()
+    ix = torch.unsqueeze(ix, 1).long()  # 转为[n,1],数据类型必须是long
+    one_hots = torch.zeros_like(ix)
+    one_hots = one_hots.repeat([1, depth])
+    return one_hots.scatter_(1, ix, 1)
+
+
 def main():
     boxes_a = torch.Tensor([[1, 2, 3, 12, 32, 43], [1, 2, 3, 22, 42, 13]])
     boxes_b = torch.Tensor([[6, 9, 9, 12, 32, 43], [1, 2, 3, 22, 42, 13], [22, 22, 23, 42, 42, 63]])
