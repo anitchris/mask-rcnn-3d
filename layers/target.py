@@ -110,7 +110,7 @@ class MrcnnTarget(nn.Module):
             boxes = torch.from_numpy(gt_boxes[i]).cuda()
             labels = torch.from_numpy(gt_labels[i]).cuda()
             # 属于第i个样本的proposals
-            roi_indices = (proposals == i).nonzero()[:, 0]  # 索引
+            roi_indices = (batch_indices == i).nonzero()[:, 0]  # 索引
             rois = torch.index_select(proposals, 0, roi_indices)
             # 计算iou
             iou = torch_utils.iou_3d(boxes, rois)  # [gt_num,roi_num]
