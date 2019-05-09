@@ -114,6 +114,18 @@ def apply_regress_3d(deltas, anchors):
     return anchors_refined
 
 
+def shuffle_and_select(tensor, select_num):
+    """
+    在第一维打乱，并选择指定个数的原始
+    :param tensor: 大于1维的张量
+    :param select_num:
+    :return:
+    """
+    length = tensor.shape[0]
+    indices = torch.randperm(length)
+    return tensor[indices][:select_num]
+
+
 def main():
     boxes_a = torch.Tensor([[1, 2, 3, 12, 32, 43], [1, 2, 3, 22, 42, 13]])
     boxes_b = torch.Tensor([[6, 9, 9, 12, 32, 43], [1, 2, 3, 22, 42, 13], [22, 22, 23, 42, 42, 63]])
