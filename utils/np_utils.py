@@ -68,5 +68,5 @@ def regress_target_3d(anchors, gt_boxes):
     dd = np.log(gt_d / d)
 
     target = np.stack([dy, dx, dz, dh, dw, dd], axis=1)
-    target /= np.array([0.1, 0.1, 0.2, 0.2])
+    #target /= np.array([0.1, 0.1, 0.2, 0.2])
     return target
