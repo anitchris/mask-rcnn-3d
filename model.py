@@ -83,7 +83,7 @@ class LungNet(nn.Module):
 
         if self.phase == 'test':
             # todo: 预测过程
-            pass
+            return None
 
     # property装饰的方法可以直接当作属性调用
     @property
