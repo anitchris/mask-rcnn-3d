@@ -65,16 +65,19 @@ class MrcnnHead(nn.Module):
             nn.Conv3d(self.out_channel_branch2, self.num_classes, kernel_size=1, stride=1)
         )
 
-    def forward(self, roi):
+    def forward(self, rois):
         """
-        :param roi: 5-d tensor, shape[batch, channel, height, weight, depth]
+        :param rois: tensor, shape[roi_num, channel, height, weight, depth]
         :return:
+                cls: tensor, shape[roi_num, num_classes]
+                regr: tensor, shape[roi_num, (dy,dx,dz,dh,dw,dd)]
+                mask: tensor, shape[roi_num, channel, height, weight, depth]
         """
-        out1 = self.branch_1(roi)
+        out1 = self.branch_1(rois)
         out1 = out1.view(-1, self.out_channel_branch1)
         cls = self.cls(out1)
         regr = self.regr(out1)
-        mask = self.branch_2(roi)
+        mask = self.branch_2(rois)
         return cls, regr, mask
 
 
