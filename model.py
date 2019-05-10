@@ -26,7 +26,7 @@ class LungNet(nn.Module):
         super(LungNet, self).__init__()
         self.cfg = cfg
         self.phase = phase
-        self.base_net = Net(cfg.NUM_ANCHORS)
+        self.base_net = Net(cfg.NUM_BLOCKS_FORW, self.NUM_BLOCKS_BACK)
         self.rpn_head = RpnHead(cfg.NUM_ANCHORS)
         self.mrcnn_head = MrcnnHead(cfg)
         self.anchors = generate_anchors(cfg.SCALES, cfg.STRIDE, cfg.HEIGHT,

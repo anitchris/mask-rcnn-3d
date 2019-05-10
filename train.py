@@ -36,7 +36,7 @@ for epoch in range(cfg.EPOCHS):
 
         # 每训练100个bathes后打印日志
         if i % 100 == 0:
-            print('[INFO] epoch: {} batchs: {} loss: %.3f' % (epoch + 1, i, loss / 100))
+            print('[INFO] Epoch: {} Batches: {} Loss: {}'.format(epoch+1, i, loss / 100))
             loss = 0.0
 
 print('Finished Training')
