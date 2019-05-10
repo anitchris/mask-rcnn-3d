@@ -25,7 +25,7 @@ class RpnHead(nn.Module):
 
 class MrcnnHead(nn.Module):
     def __init__(self, in_channel, out_channel_branch1, out_channel_branch2,
-                 kernel_size, num_classes):
+                 pool_size_h, pool_size_w, pool_size_t, kernel_size, num_classes):
         """
         构造函数
         :param in_channel: int, 输入的channel大小
@@ -40,6 +40,10 @@ class MrcnnHead(nn.Module):
         self.num_classes = num_classes
         self.out_channel_branch1 = out_channel_branch1
         self.out_channel_branch2 = out_channel_branch2
+        self.pool_size_h = pool_size_h
+        self.pool_size_w = pool_size_w
+        self.pool_size_t = pool_size_t
+        self.flatten_features = out_channel_branch1 * pool_size_h * pool_size_w * pool_size_t
 
         # branch1, 得到class和regr box
         self.branch_1 = nn.Sequential(
@@ -48,8 +52,8 @@ class MrcnnHead(nn.Module):
             nn.Conv3d(self.out_channel_branch1, self.out_channel_branch1, kernel_size=1),
             nn.ReLU(inplace=True)
         )
-        self.cls = nn.Linear(out_channel_branch1, self.num_classes)
-        self.regr = nn.Linear(out_channel_branch1, self.num_classes * 6)
+        self.cls = nn.Linear(self.flatten_features, self.num_classes)
+        self.regr = nn.Linear(self.flatten_features, self.num_classes * 6)
 
         # branch2, 得到mask
         self.branch_2 = nn.Sequential(
@@ -74,7 +78,7 @@ class MrcnnHead(nn.Module):
                 mask: tensor, shape[roi_num, channel, height, weight, depth]
         """
         out1 = self.branch_1(rois)
-        out1 = out1.view(-1, self.out_channel_branch1)
+        out1 = out1.view(-1, self.flatten_features)
         cls = self.cls(out1)
         regr = self.regr(out1)
         mask = self.branch_2(rois)
