@@ -10,11 +10,18 @@ from torch import nn
 
 class RpnHead(nn.Module):
     def __init__(self, num_anchors):
+        """
+        :param num_anchors: int, number of anchor per feature map grid
+        """
         super(RpnHead, self).__init__()
         self.num_anchors = num_anchors
         self.conv_head = nn.Conv3d(128, self.num_anchors * 7, kernel_size=1)
 
     def forward(self, x):
+        """
+        :param x: 5-d feature map from base_net,[b,c,h,w,d]
+        :return: rpn_target,[b,total_num_anchor,6+1]
+        """
         out_head = self.conv_head(x)
         size = out_head.size()
         b, h, w, d = size[0], size[2], size[3], size[4]
