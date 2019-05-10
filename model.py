@@ -63,11 +63,8 @@ class LungNet(nn.Module):
         # 获取mrcnn target
         batch_rois, gt_deltas, gt_labels, gt_masks, rois_indices = self.mrcnn_traget(batch_proposals, batch_indices,
                                                                                      gt_boxes, gt_labels)
-        # 维度处理
-        rois_indices = torch.unsqueeze(rois_indices, dim=1)
-        rois = torch.cat((batch_rois, rois_indices), dim=1)
         # roi align
-        rois = self.roi_align(feature_map, rois)
+        rois = self.roi_align(feature_map, batch_rois, rois_indices)
 
         # 获取mrcnn head输出
         predict_mrcnn_cls, predict_mrcnn_regr, predict_mask = self.mrcnn_head(rois)
