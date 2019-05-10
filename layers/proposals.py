@@ -21,11 +21,9 @@ class Proposal(nn.Module):
 
     def forward(self, anchors, predict_scores, predict_deltas):
         """
-
         :param anchors: torch tensor [anchors_num,(y1,x1,z1,y2,x2,z2)]
         :param predict_scores: torch tensor [batch,anchors_num]
         :param predict_deltas: torch tensor [batch,anchors_num,(dx,dy,dz,dh,dw,dd)]
-
         :return: batch_proposals: proposals边框坐标[proposals_num,(y1,x1,z1,y2,x2,z2)]
         :return: batch_scores: proposals边框得分[proposals_num]
         :return: batch_indices: 指向之前属于哪个样本[proposals_num]
@@ -46,10 +44,10 @@ class Proposal(nn.Module):
             cur_anchors = torch.clone(anchors)
             # 应用边框回归
             boxes = apply_regress_3d(deltas, cur_anchors)
-            # change axis to y1,x1,y2,x2,z1,z2 for nms
+            # [n,(y1,x1,y2,x2,z1,z2 ,sores)], axis swapped for nms
             box_with_score = torch.cat((boxes[:, [0, 1, 3, 4, 2, 5]], scores.unsqueeze(-1)), -1)
             # nms
-            keep = nms_3d(box_with_score, self.nms_threshold)  # [n,(y1,x1,z1,y2,x2,z2,sores)]
+            keep = nms_3d(box_with_score, self.nms_threshold)
             keep = keep[:self.max_output_num]
             indices = torch.Tensor([bix] * keep.shape[0])  # proposals处于batch中哪个样本
             batch_indices.append(indices)
