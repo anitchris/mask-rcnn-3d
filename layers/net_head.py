@@ -31,21 +31,29 @@ class RpnHead(nn.Module):
 
 
 class MrcnnHead(nn.Module):
-    def __init__(self, cfg):
+    def __init__(self, in_channel=128, kernel_size=3, num_classes=2, out_channel_branch1=16,
+                 out_channel_branch2=16, pool_size_h=7, pool_size_w=7, pool_size_d=7):
         """
         构造函数
-        :param cfg: 配置上下文
+        :param in_channel: int, 输入通道大小
+        :param kernel_size: int, 卷积核大小
+        :param num_classes: int, 类别数量
+        :param out_channel_branch1: int, 分支1的输出通道大小
+        :param out_channel_branch2: int, 分支2的输出通道大小
+        :param pool_size_h: int, roi align后的高
+        :param pool_size_w: int, roi align后的宽
+        :param pool_size_d: int, roi align后的深度
         """
         super(MrcnnHead, self).__init__()
-        self.in_channel = cfg.IN_CHANNEL
-        self.kernel_size = cfg.KERNEL_SIZE,
-        self.num_classes = cfg.NUM_CLASSES
-        self.out_channel_branch1 = cfg.OUT_CHANNEL_BRANCH1
-        self.out_channel_branch2 = cfg.OUT_CHANNEL_BRANCH2
-        self.pool_size_h = cfg.POOL_SIZE_H
-        self.pool_size_w = cfg.POOL_SIZE_W
-        self.pool_size_t = cfg.POOL_SIZE_T
-        self.flatten_features = cfg.OUT_CHANNEL_BRANCH1 * cfg.POOL_SIZE_H * cfg.POOL_SIZE_W * cfg.POOL_SIZE_T
+        self.in_channel = in_channel
+        self.kernel_size = kernel_size
+        self.num_classes = num_classes
+        self.out_channel_branch1 = out_channel_branch1
+        self.out_channel_branch2 = out_channel_branch2
+        self.pool_size_h = pool_size_h
+        self.pool_size_w = pool_size_w
+        self.pool_size_d = pool_size_d
+        self.flatten_features = out_channel_branch1 * pool_size_h * pool_size_w * pool_size_d
 
         # branch1, 得到class和regr box
         self.branch_1 = nn.Sequential(
