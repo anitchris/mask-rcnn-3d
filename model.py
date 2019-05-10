@@ -17,15 +17,15 @@ from layers.losses import rpn_cls_loss, rpn_regress_loss, mrcnn_cls_loss, mrcnn_
 
 
 class LungNet(nn.Module):
-    def __init__(self, cfg, parse="train"):
+    def __init__(self, cfg, phase="train"):
         """
-
+        构造函数
         :param cfg: 配置上下文
         :param parse: "train" or "test"
         """
         super(LungNet, self).__init__()
         self.cfg = cfg
-        self.phase = parse
+        self.phase = phase
         self.base_net = Net(cfg.NUM_ANCHORS)
         self.rpn_head = RpnHead(cfg.NUM_ANCHORS)
         self.mrcnn_head = MrcnnHead(cfg)
@@ -61,8 +61,8 @@ class LungNet(nn.Module):
         # 获取proposals
         batch_proposals, batch_scores, batch_indices = self.proposal(self.anchors, predict_scores, predict_deltas)
         # 获取mrcnn target
-        batch_rois, gt_deltas, gt_labels, rois_indices = self.mrcnn_traget(batch_proposals, batch_indices,
-                                                                                 gt_boxes, gt_labels)
+        batch_rois, gt_deltas, gt_labels, gt_masks, rois_indices = self.mrcnn_traget(batch_proposals, batch_indices,
+                                                                                     gt_boxes, gt_labels)
         # 维度处理
         rois_indices = torch.unsqueeze(rois_indices, dim=1)
         rois = torch.cat((batch_rois, rois_indices), dim=1)
@@ -75,8 +75,7 @@ class LungNet(nn.Module):
         # 计算mrcnn阶段loss
         cls_loss_mrcnn = mrcnn_cls_loss(gt_labels, predict_mrcnn_cls)
         regr_loss_mrcnn = mrcnn_regress_loss(gt_deltas, predict_mrcnn_regr, gt_labels)
-        gt_mask = None  # todo: 真实的mask将从mrcnn_target中返回，待完成
-        mask_loss = mrcnn_mask_loss(gt_mask, predict_mask, gt_labels)
+        mask_loss = mrcnn_mask_loss(gt_masks, predict_mask, gt_labels)
 
         # 总的Loss
         self.total_loss = cls_loss_rpn + regr_loss_rpn + cls_loss_mrcnn + regr_loss_mrcnn + mask_loss
