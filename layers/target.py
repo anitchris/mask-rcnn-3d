@@ -10,6 +10,7 @@ from torch import nn
 import numpy as np
 from utils.np_utils import iou_3d, regress_target_3d
 from utils import torch_utils
+from cuda_functions.roi_align_3D.roi_align.crop_and_resize import CropAndResizeFunction as crop_and_resize
 
 
 class RpnTarget(nn.Module):
@@ -77,36 +78,49 @@ class MrcnnTarget(nn.Module):
     计算mrcnn网络的分类、回归、分割 目标；还有一个作用就是过滤训练的proposals
     """
 
-    def __init__(self, train_rois_per_image, positive_iou_threshold=0.5,
-                 negative_iou_threshold=0.02, positive_ratio=0.1):
+    def __init__(self, train_rois_per_image, mask_pool_size=28, positive_iou_threshold=0.5,
+                 negative_iou_threshold=0.02, positive_ratio=0.1, ):
+        """
+
+        :param train_rois_per_image: 数值
+        :param mask_pool_size: mask池化后的尺寸，数值，一般28
+        :param positive_iou_threshold:
+        :param negative_iou_threshold:
+        :param positive_ratio:
+        """
         super(MrcnnTarget, self).__init__()
         self.train_rois_per_image = train_rois_per_image
+        self.mask_pool_size = mask_pool_size
         self.positive_iou_threshold = positive_iou_threshold
         self.negative_iou_threshold = negative_iou_threshold
         self.positive_ratio = positive_ratio
 
-    def forward(self, proposals, batch_indices, gt_boxes, gt_labels):
+    def forward(self, proposals, batch_indices, gt_boxes, gt_labels, gt_masks):
         """
 
         :param proposals: tensor [proposals_num,(y1,x1,z1,y2,x2,z2)]
         :param batch_indices: proposal在原始的mini-batch中的索引号，tensor [proposals_num]
         :param gt_boxes: list of numpy [n,(y1,x1,z1,y2,x2,z2)]
         :param gt_labels: list of numpy [n]
+        :param gt_masks: list of numpy [y,x,z]  0 1 值；每张只有一个mask
 
         :return: rois: tensor [rois_num,(y1,x1,z1,y2,x2,z2)]
         :return: deltas: tensor [rois_num,(dy,dx,dz,dh,dw,dd)]
         :return: labels: tensor [rois_num,(y1,x1,z1,y2,x2,z2)]
+        :return: masks: tensor [rois_num,28,28,28] 0 1 值；28是mask_pool_size
         :return: rois_indices: tensor [rois_num] roi在原始的mini-batch中的索引号;roiAlign时用到
         """
         batch_rois = []
         batch_deltas = []
         batch_labels = []
+        batch_masks = []
         batch_rois_indices = []
         # 逐个样本处理
         for i in range(len(gt_boxes)):
             # gt to gpu
             boxes = torch.from_numpy(gt_boxes[i]).float().cuda()
             labels = torch.from_numpy(gt_labels[i]).cuda()
+            masks = torch.from_numpy(gt_masks[i]).int().cuda()
             # 属于第i个样本的proposals
             roi_indices = (batch_indices == i).nonzero()[:, 0]  # 索引
             rois = torch.index_select(proposals, 0, roi_indices)
@@ -145,11 +159,18 @@ class MrcnnTarget(nn.Module):
             batch_rois.append(rois)
             batch_deltas.append(deltas)
             batch_labels.append(labels)
+            batch_masks.append(masks)
 
         # 在拼接到一块
         batch_rois = torch.cat(batch_rois, dim=0)
         batch_deltas = torch.cat(batch_deltas, dim=0)
         batch_labels = torch.cat(batch_labels, dim=0)
-        batch_rois_indices = torch.cat(batch_rois_indices, dim=0)
+        batch_rois_indices = torch.cat(batch_rois_indices, dim=0).int()
+        batch_masks = torch.cat(batch_masks, dim=0)  # [n,y,x,z]
+        # 最后处理masks
+        batch_masks = crop_and_resize(self.mask_pool_size,
+                                      self.mask_pool_size,
+                                      self.mask_pool_size,
+                                      0)(batch_masks, boxes, batch_indices)  # [rois_num,28,28,28]
 
-        return batch_rois, batch_deltas, batch_labels, batch_rois_indices
+        return batch_rois, batch_deltas, batch_labels, batch_masks, batch_rois_indices
