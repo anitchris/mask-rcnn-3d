@@ -168,6 +168,7 @@ class MrcnnTarget(nn.Module):
         batch_rois_indices = torch.cat(batch_rois_indices, dim=0).int()
         batch_masks = torch.cat(batch_masks, dim=0)  # [n,y,x,z]
         # 最后处理masks
+        boxes = batch_rois[:, [0, 1, 3, 4, 2, 5]]  # [n,(y1,x1,z1,y2,x2,z2)] => [n,(y1,x1,y2,x2,z1,z2)]
         batch_masks = crop_and_resize(self.mask_pool_size,
                                       self.mask_pool_size,
                                       self.mask_pool_size,
