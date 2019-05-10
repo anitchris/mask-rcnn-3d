@@ -75,13 +75,14 @@ class MrcnnHead(nn.Module):
         :return:
                 cls: tensor, shape[roi_num, num_classes]
                 regr: tensor, shape[roi_num, (dy,dx,dz,dh,dw,dd)]
-                mask: tensor, shape[roi_num, channel, height, weight, depth]
+                mask: tensor, shape[roi_num, height, weight, depth, channel]
         """
         out1 = self.branch_1(rois)
         out1 = out1.view(-1, self.flatten_features)
         cls = self.cls(out1)
         regr = self.regr(out1)
         mask = self.branch_2(rois)
+        mask = mask.transpose((0, 2, 3, 4, 1))
         return cls, regr, mask
 
 
