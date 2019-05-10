@@ -20,8 +20,7 @@ class LungNet(nn.Module):
     def __init__(self, phase="train"):
         """
         构造函数
-        :param cfg: 配置上下文
-        :param parse: "train" or "test"
+        :param phase: "train" or "test"
         """
         super(LungNet, self).__init__()
         self.cfg = cfg
