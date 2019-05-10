@@ -16,12 +16,12 @@ dataset = Data3Lung(cfg.DATA_DIR, cfg, phase='train')
 train_loader = DataLoader(dataset, shuffle=True)
 
 # 初始化网络
-net = LungNet(cfg, phase='train')
+net = LungNet(phase='train')
 optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
 
 # 训练
 for epoch in range(cfg.EPOCHS):
-    for i, data in enumerate(train_loader):
+    for i, data in enumerate(train_loader, 1):
         inputs, masks, gts = data
 
         # 清零梯度
@@ -33,3 +33,10 @@ for epoch in range(cfg.EPOCHS):
         loss = net.total_loss
         loss.backward()
         optimizer.step()
+
+        # 每训练100个bathes后打印日志
+        if i % 100 == 0:
+            print('[INFO] epoch: {} batchs: {} loss: %.3f' % (epoch + 1, i, loss / 100))
+            loss = 0.0
+
+print('Finished Training')
