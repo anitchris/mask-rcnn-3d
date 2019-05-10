@@ -39,7 +39,7 @@ class RoiAlign(nn.Module):
         # 坐标归一化
         boxes = rois / self.image_size
         # 转换维度
-        boxes = boxes[:, [0, 1, 3, 4, 2, 5]]  # [n,(y1,x1,z1,y2,x2,z2)] => [n,(y1,x1,y2,x2,z1,z2)]
+        boxes = boxes[:, [1, 0, 4, 3, 2, 5]]  # [n,(y1,x1,z1,y2,x2,z2)] => [n,(x1,y1,x2,y2,z1,z2)]
         batch_indices = rois_indices.int()
         x = crop_and_resize(self.pool_size_h, self.pool_size_w, self.pool_size_d, 0)(features, boxes, batch_indices)
         return x
