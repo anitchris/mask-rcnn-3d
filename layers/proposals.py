@@ -22,9 +22,9 @@ class Proposal(nn.Module):
     def forward(self, anchors, predict_scores, predict_deltas):
         """
 
-        :param anchors: [anchors_num,(y1,x1,z1,y2,x2,z2)]
-        :param predict_scores: [batch,anchors_num]
-        :param predict_deltas: [batch,anchors_num,(dx,dy,dz,dh,dw,dd)]
+        :param anchors: torch tensor [anchors_num,(y1,x1,z1,y2,x2,z2)]
+        :param predict_scores: torch tensor [batch,anchors_num]
+        :param predict_deltas: torch tensor [batch,anchors_num,(dx,dy,dz,dh,dw,dd)]
 
         :return: batch_proposals: proposals边框坐标[proposals_num,(y1,x1,z1,y2,x2,z2)]
         :return: batch_scores: proposals边框得分[proposals_num]

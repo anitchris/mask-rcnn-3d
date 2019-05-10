@@ -43,8 +43,8 @@ def rpn_regress_loss(deltas, predict_deltas, anchors_tag):
 def mrcnn_cls_loss(rois_labels, predict_logits):
     """
     mrcnn 分类损失
-    :param rois_labels: [rois_num]
-    :param predict_logits: [rois_num,num_classes]
+    :param rois_labels: torch tensor [rois_num]
+    :param predict_logits: torch tensor[rois_num,num_classes]
     :return:
     """
     # 转one hot编码
@@ -57,9 +57,9 @@ def mrcnn_cls_loss(rois_labels, predict_logits):
 def mrcnn_regress_loss(rois_deltas, predict_deltas, rois_labels):
     """
     mrcnn 回归损失
-    :param rois_deltas:[rois_num,(dy,dx,dz,dh,dw,dd)]
-    :param predict_deltas:[rois_num,(dy,dx,dz,dh,dw,dd)]
-    :param rois_labels:[rois_num]
+    :param rois_deltas: torch tensor [rois_num,(dy,dx,dz,dh,dw,dd)]
+    :param predict_deltas: torch tensor [rois_num,(dy,dx,dz,dh,dw,dd)]
+    :param rois_labels: torch tensor [rois_num]
     :return:
     """
     # 只有正样本计算损失
@@ -73,9 +73,9 @@ def mrcnn_regress_loss(rois_deltas, predict_deltas, rois_labels):
 def mrcnn_mask_loss(mask, predict_mask_logits, rois_labels):
     """
     mrcnn mask损失
-    :param mask: 真实的 mask[rois_num,y,x,z] 0,1值
-    :param predict_mask_logits:  [rois_num,y,x,z,num_classes]
-    :param rois_labels:真实的类别[rois_num]
+    :param mask: 真实的 mask torch tensor [rois_num,y,x,z] 0,1值
+    :param predict_mask_logits: torch tensor [rois_num,y,x,z,num_classes]
+    :param rois_labels:真实的类别 torch tensor[rois_num]
     :return:
     """
     predict_mask = F.softmax(predict_mask_logits, dim=-1)  # 转为得分
