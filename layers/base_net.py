@@ -11,14 +11,13 @@ from torch import nn
 
 
 class Net(nn.Module):
-    def __init__(self, num_anchors):
+    def __init__(self, num_blocks_forw, num_blocks_back):
         """
-        删除coord参数与结构上coord的channels做torch.cat的res18+unet基网络
+        
+        :param num_blocks_forw: 维度（4,），具体取值[2, 2, 3, 3]
+        :param num_blocks_back: 维度（2,），具体取值[3, 3]
         """
         super(Net, self).__init__()
-        self.num_anchors = num_anchors
-        num_blocks_forw = [2, 2, 3, 3]
-        num_blocks_back = [3, 3]
         self.featureNum_forw = [24, 32, 64, 96, 96]  # 原[24, 32, 64, 64, 64]
         self.featureNum_back = [128, 64, 96]  # 原[128, 64, 64]
         self.preBlock = nn.Sequential(
@@ -53,35 +52,35 @@ class Net(nn.Module):
         # dropout
         self.drop = nn.Dropout3d(p=0.5, inplace=False)
 
-    def _make_layer(self, num_blocks, indc, isDown):
+    def _make_layer(self, num_blocks, inds, is_down):
         """
         指定num_blocks数量的layers结构
-        :param num_blocks: num_blocks_forw 与 num_blocks_back
-        :param indc: featureNum变量中channel的索引
-        :param isDown: True or False 代表unet的特征提取部分还是上采样部分
+        :param num_blocks: 标量（num_blocks_forw = [2, 2, 3, 3]与featureNum_back = [128, 64, 96]）
+        :param inds: 标量（featureNum_forw与featureNum_back的索引）
+        :param is_down: boolean值（unet下采样部分or上采样部分）
         :return:
         """
         layers = []
         for i in range(num_blocks):
             if i == 0:
-                if isDown:
-                    layers.append(PostRes(self.featureNum_forw[indc], self.featureNum_forw[indc + 1]))
+                if is_down:
+                    layers.append(Bottleneck(self.featureNum_forw[inds], self.featureNum_forw[inds + 1]))
                 else:
-                    layers.append(PostRes(self.featureNum_back[indc + 1] + self.featureNum_forw[indc + 2],
-                                          self.featureNum_back[indc]))
+                    layers.append(Bottleneck(self.featureNum_back[inds + 1] + self.featureNum_forw[inds + 2],
+                                             self.featureNum_back[inds]))
             else:
-                if isDown:
-                    layers.append(PostRes(self.featureNum_forw[indc + 1], self.featureNum_forw[indc + 1]))
+                if is_down:
+                    layers.append(Bottleneck(self.featureNum_forw[inds + 1], self.featureNum_forw[inds + 1]))
                 else:
-                    layers.append(PostRes(self.featureNum_back[indc], self.featureNum_back[indc]))
+                    layers.append(Bottleneck(self.featureNum_back[inds], self.featureNum_back[inds]))
 
         return nn.Sequential(*layers)
 
     def forward(self, x):
         """
-        前向传播的具体网络结构，输入为x，暂未注释输入维度
-        :param x: [Batch, Channel, D, H, W]
-        :return: [anchors_all, (coord_z, coord_y, coord_x, diameters, cls_tag)]
+        具体网络结构
+        :param x: [batch, channel, D, H, W]
+        :return: [batch, channel, D, H, W]
         """
         # 收缩路径
         out = self.preBlock(x)  # 16
@@ -107,9 +106,15 @@ class Net(nn.Module):
         return feature
 
 
-class PostRes(nn.Module):
+class Bottleneck(nn.Module):
     def __init__(self, n_in, n_out, stride=1):
-        super(PostRes, self).__init__()
+        """
+        
+        :param n_in: 标量，输入tensor的channel数
+        :param n_out: 标量，输出tensor的channel数
+        :param stride: 标量
+        """
+        super(Bottleneck, self).__init__()
         self.conv1 = nn.Conv3d(n_in, n_out, kernel_size=3, stride=stride, padding=1)
         self.bn1 = nn.BatchNorm3d(n_out)
         self.relu = nn.ReLU(inplace=True)
@@ -136,7 +141,6 @@ class PostRes(nn.Module):
         out += residual
         out = self.relu(out)
         return out
-
 
 # if __name__ == '__main__':
 #     net = Net(3)
