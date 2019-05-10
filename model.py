@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
    File Name:     model.py
-   Description:   网络
+   Description:   整体的前向传播过程
    Author:        steven.yi
    Date:          2019/5/10
 """
@@ -82,7 +82,7 @@ class LungNet(nn.Module):
 
         if self.phase == 'test':
             # todo: 预测过程
-            return None
+            pass
 
     # property装饰的方法可以直接当作属性调用
     @property
