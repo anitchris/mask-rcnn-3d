@@ -39,4 +39,4 @@ for epoch in range(cfg.EPOCHS):
             print('[INFO] Epoch: {} Batches: {} Loss: {}'.format(epoch+1, i, loss / 100))
             loss = 0.0
 
-print('Finished Training')
+print('[INFO] Finished Training')
