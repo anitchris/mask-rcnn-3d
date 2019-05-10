@@ -7,8 +7,7 @@
 """
 import torch
 from torch import nn
-from utils.torch_utils import apply_regress_3d
-from cuda_functions.nms_3D.pth_nms import nms_gpu as nms_3d
+from utils.torch_utils import apply_regress_3d, nms_3d
 
 
 class Proposal(nn.Module):
@@ -44,10 +43,8 @@ class Proposal(nn.Module):
             cur_anchors = torch.clone(anchors)
             # 应用边框回归
             boxes = apply_regress_3d(deltas, cur_anchors)
-            # [n,(y1,x1,y2,x2,z1,z2 ,sores)], axis swapped for nms
-            box_with_score = torch.cat((boxes[:, [0, 1, 3, 4, 2, 5]], scores.unsqueeze(-1)), -1)
             # nms
-            keep = nms_3d(box_with_score, self.nms_threshold)
+            keep = nms_3d(boxes, self.nms_threshold)
             keep = keep[:self.max_output_num]
             indices = torch.Tensor([bix] * keep.shape[0])  # proposals处于batch中哪个样本
             batch_indices.append(indices)

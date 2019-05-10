@@ -7,6 +7,21 @@
 """
 
 import torch
+from cuda_functions.nms_3D.pth_nms import nms_gpu
+
+
+def nms_3d(boxes, scores, nms_threshold):
+    """
+    包装一下nms_gpu，该函数接收的数据维度是y1,x1,y2,x2,z1,z2 ,sores
+    :param boxes: tensor [n,(y1,x1,z1,y2,x2,z2)]
+    :param scores: tensor [n]
+    :param nms_threshold: 浮点标量
+    :return: keep: nms后保留的索引 tensor [m]
+    """
+    # [n,(y1,x1,z1,y2,x2,z2)] => [n,(y1,x1,y2,x2,z1,z2 ,sores)], axis swapped for nms
+    box_with_score = torch.cat((boxes[:, [0, 1, 3, 4, 2, 5]], scores.unsqueeze(-1)), -1)
+    keep = nms_gpu(box_with_score, nms_threshold)
+    return keep
 
 
 def iou_3d(boxes_a, boxes_b):
