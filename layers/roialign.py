@@ -12,6 +12,7 @@ from cuda_functions.roi_align_3D.roi_align.crop_and_resize import CropAndResizeF
 
 
 class RoiAlign(nn.Module):
+    # pool_size_h, pool_size_w, pool_size_t, image_size均为整数，不能是torch tensor
     def __init__(self, pool_size_h, pool_size_w, pool_size_t, image_size):
         self.pool_size_h = pool_size_h
         self.pool_size_w = pool_size_w
@@ -29,6 +30,6 @@ class RoiAlign(nn.Module):
         """
         # 坐标归一化
         boxes = rois[:, :6] / self.image_size
-        batch_indices = rois[:, 6]
+        batch_indices = rois[:, 6].int()
         x = crop_and_resize(self.pool_size_h, self.pool_size_w, self.pool_size_t, 0)(features, boxes, batch_indices)
         return x
