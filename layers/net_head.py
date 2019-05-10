@@ -26,7 +26,7 @@ class RpnHead(nn.Module):
         size = out_head.size()
         b, h, w, d = size[0], size[2], size[3], size[4]
         rpn_target = out_head.view(b, 7, h * w * d * self.num_anchors)
-        rpn_target = rpn_target.transpose((0,2,1))
+        rpn_target = rpn_target.transpose((0, 2, 1))
         return rpn_target
 
 
@@ -86,7 +86,6 @@ class MrcnnHead(nn.Module):
         mask = self.branch_2(rois)
         mask = mask.transpose((0, 2, 3, 4, 1))
         return cls, regr, mask
-
 
 # if __name__ == '__main__':
 #     import torch
