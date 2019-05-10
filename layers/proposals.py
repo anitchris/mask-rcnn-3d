@@ -42,22 +42,22 @@ class Proposal(nn.Module):
             order = order[:self.pre_nms_limit]
             scores = scores[:self.pre_nms_limit]
             deltas = predict_deltas[bix, order, :]
+            anchors = anchors[order, :]
             cur_anchors = torch.clone(anchors)
             # 应用边框回归
             boxes = apply_regress_3d(deltas, cur_anchors)
+            # change axis to y1,x1,y2,x2,z1,z2 for nms
+            box_with_score = torch.cat((boxes[:, [0, 1, 3, 4, 2, 5]], scores.unsqueeze(-1)), -1)
             # nms
-            keep = nms_3d(torch.cat([boxes, scores.unsqueeze(-1)], -1),
-                          self.nms_threshold)  # [n,(y1,x1,z1,y2,x2,z2,sores)]
+            keep = nms_3d(box_with_score, self.nms_threshold)  # [n,(y1,x1,z1,y2,x2,z2,sores)]
             keep = keep[:self.max_output_num]
-            # 生成batch_indices
             indices = torch.Tensor([bix] * keep.shape[0])  # proposals处于batch中哪个样本
             batch_indices.append(indices)
-            batch_proposals.append(keep[:, :-1])
-            batch_scores.append(keep[:, -1])
+            batch_proposals.append(boxes[keep])
+            batch_scores.append(scores[keep])
 
         # 在batch上打平，之前的batch_size维度没有了
         batch_proposals = torch.cat(batch_proposals, dim=0)
         batch_scores = torch.cat(batch_scores, dim=0)
         batch_indices = torch.cat(batch_indices, dim=0)
-
         return batch_proposals, batch_scores, batch_indices
