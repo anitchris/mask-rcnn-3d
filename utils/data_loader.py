@@ -80,10 +80,11 @@ class Data3Lung(Dataset):  # Dataset是一个包装类，用来将数据包装�
             mask = self.masks[rand_id]
             gt = self.gts[rand_id] if not is_random else []
             # crop得到样本
-            sample, sam_mask, sam_gt = self.crop(img, mask, gt)
+            sample, sam_mask, sam_gt, sam_label = self.crop(img, mask, gt)
             # augment先不管
             return torch.from_numpy(sample.astype(np.float32)), torch.from_numpy(
-                sam_mask.astype(np.float32)), torch.from_numpy(sam_gt.astype(np.float32))
+                sam_mask.astype(np.float32)), torch.from_numpy(sam_gt.astype(np.float32)), torch.from_numpy(
+                sam_label.astype(np.float32))
         else:  # 测试阶段（待完成）
             img = self.imgs[idx]
             mask = self.masks[idx]
@@ -120,6 +121,7 @@ class Crop(object):
         patch_img: [batch, 1, 128, 128, 128] (batch,channel,z,y,x)
         patch_mask: [batch, 1, 128, 128, 128] (batch,channel,z,y,x)
         target_box: [batch, 6] (batch,y1,x1,z1,y2,x2,z2)
+        patch_label: [batch, 1]
         """
         # gt中(y1,x1,z1,y2,x2,z2)表示转(y,x,z,diameter)
         crop_size = np.array(self.crop_size)
@@ -186,7 +188,9 @@ class Crop(object):
             [target_box[1] - target_box[3] / 2, target_box[2] - target_box[3] / 2, target_box[0] - target_box[3] / 2,
              target_box[1] + target_box[3] / 2, target_box[2] + target_box[3] / 2,
              target_box[0] + target_box[3] / 2])
-        return patch_img, patch_mask, target_box
+        patch_label = np.ones([1])
+
+        return patch_img, patch_mask, target_box, patch_label
 
 
 def main():
@@ -194,7 +198,7 @@ def main():
     测试类
     :return: 
     """
-    data_dir = '/home/dataset/medical/jida_dicom/subset/'
+    data_dir = 'F:\迅雷下载\dicom文件-标记文件\subset'
     # 数据包装
     dataset = Data3Lung(
         data_dir,
@@ -212,12 +216,12 @@ def main():
     for epoch in range(3):
         for i, data in enumerate(train_loader):
             # 将数据从train_loader中读出来，一次读取的样本数是batch_size=4个
-            inputs, masks, gts = data
+            inputs, masks, gts, labels = data
             # 将这些数据转换成Variable类型
-            inputs, masks, gts = Variable(inputs), Variable(masks), Variable(gts)
+            inputs, masks, gts, labels = Variable(inputs), Variable(masks), Variable(gts), Variable(labels)
             # 接下来就是训练环节，这里使用print来代替
             print("epoch：", epoch, "的第", i, "个inputs", inputs.data.size(), "masks", masks.data.size(), "gts",
-                  gts.data.size())
+                  gts.data.size(), "labels", labels.data.size())
 
 
 if __name__ == '__main__':
