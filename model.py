@@ -5,7 +5,6 @@
    Author:        steven.yi
    Date:          2019/5/10
 """
-import torch
 from torch import nn
 from layers.base_net import Net
 from layers.net_head import RpnHead, MrcnnHead
@@ -14,10 +13,11 @@ from layers.proposals import Proposal
 from layers.target import RpnTarget, MrcnnTarget
 from layers.roialign import RoiAlign
 from layers.losses import rpn_cls_loss, rpn_regress_loss, mrcnn_cls_loss, mrcnn_regress_loss, mrcnn_mask_loss
+from config import cur_config as cfg
 
 
 class LungNet(nn.Module):
-    def __init__(self, cfg, phase="train"):
+    def __init__(self, phase="train"):
         """
         构造函数
         :param cfg: 配置上下文
@@ -35,7 +35,6 @@ class LungNet(nn.Module):
         self.mrcnn_traget = MrcnnTarget(cfg.TRAIN_ROIS_PER_IMAGE)
         self.rpn_target = RpnTarget()
         self.roi_align = RoiAlign(cfg.POOL_SIZE_H, self.POOL_SIZE_T, self.POOL_SIZE_T, cfg.IMAGE_SIZE)
-        self.total_loss = None
 
     def forward(self, x, gt_boxes, gt_labels):
         """
@@ -43,11 +42,12 @@ class LungNet(nn.Module):
         :param x: tensor, [Batch, Channel, D, H, W]
         :param gt_boxes: list of numpy [n,(y1,x1,z1,y2,x2,z2)]
         :param gt_labels: list of numpy [n]
-        :return:
+        :return: dict
         """
+        outputs = {}
+
         # 获取feature map
         feature_map = self.base_net(x)
-
         # 获取rpn的输出
         rpn_output = self.rpn_head(feature_map)
         predict_scores, predict_deltas = rpn_output[:, :, -1], rpn_output[:, :, :-1]
@@ -75,13 +75,11 @@ class LungNet(nn.Module):
         mask_loss = mrcnn_mask_loss(gt_masks, predict_mask, gt_labels)
 
         # 总的Loss
-        self.total_loss = cls_loss_rpn + regr_loss_rpn + cls_loss_mrcnn + regr_loss_mrcnn + mask_loss
+        total_loss = cls_loss_rpn + regr_loss_rpn + cls_loss_mrcnn + regr_loss_mrcnn + mask_loss
 
         if self.phase == 'test':
             # todo: 预测过程
             pass
 
-    # property装饰的方法可以直接当作属性调用
-    @property
-    def loss(self):
-        return self.total_loss
+        outputs['loss'] = total_loss
+        return outputs
