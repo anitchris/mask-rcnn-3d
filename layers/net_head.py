@@ -29,6 +29,8 @@ class MrcnnHead(nn.Module):
         """
         构造函数
         :param in_channel: int, 输入的channel大小
+        :param out_channel_branch1: int, 分支1的输出channel大小
+        :param out_channel_branch2: int, 分支2的输出channel大小
         :param kernel_size: int or tuple, 卷积核尺寸
         :param num_classes: int, 类别数
         """
@@ -64,6 +66,10 @@ class MrcnnHead(nn.Module):
         )
 
     def forward(self, roi):
+        """
+        :param roi: 5-d tensor, shape[batch, channel, height, weight, depth]
+        :return:
+        """
         out1 = self.branch_1(roi)
         out1 = out1.view(-1, self.out_channel_branch1)
         cls = self.cls(out1)
