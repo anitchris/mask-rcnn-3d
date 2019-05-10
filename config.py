@@ -8,6 +8,7 @@
 
 
 class Config(object):
+    DATA_DIR = '/home/dataset/medical/jida_dicom/subset/'
     ANCHOR_SCALES = [2, 3, 4]
     BATCH_SIZE = 1
 

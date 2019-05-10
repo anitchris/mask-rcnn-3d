@@ -80,7 +80,7 @@ class Data3Lung(Dataset):  # Dataset是一个包装类，用来将数据包装�
             mask = self.masks[rand_id]
             gt = self.gts[rand_id] if not is_random else []
             # crop得到样本
-            sample, sam_mask, sam_gt = self.crop(img, mask, gt)  # 完全的torch.tensor处理过程（待完成）
+            sample, sam_mask, sam_gt = self.crop(img, mask, gt)
             # augment先不管
             return torch.from_numpy(sample.astype(np.float32)), torch.from_numpy(
                 sam_mask.astype(np.float32)), torch.from_numpy(sam_gt.astype(np.float32))
@@ -194,7 +194,7 @@ def main():
     测试类
     :return: 
     """
-    data_dir = r'F:\迅雷下载\dicom文件-标记文件\subset'
+    data_dir = '/home/dataset/medical/jida_dicom/subset/'
     # 数据包装
     dataset = Data3Lung(
         data_dir,
