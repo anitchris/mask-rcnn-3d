@@ -14,7 +14,7 @@ def rpn_cls_loss(anchors_tag, predict_logits):
     rpn分类损失
     :param anchors_tag:  torch tensor [batch,anchors_num]  1-正样本，-1-负样本，0-不参与训练
     :param predict_logits: torch tensor [batch,anchors_num] 预测一个值
-    :return:
+    :return: loss 标量
     """
     # 获取训练的anchors的索引号
     ix = (anchors_tag != 0).nonzero()
@@ -30,7 +30,7 @@ def rpn_regress_loss(deltas, predict_deltas, anchors_tag):
     :param deltas: 真实回归目标torch tensor [batch,anchors_num,(dy,dx,dz,dh,dw,dd)]
     :param predict_deltas: 预测回归目标torch tensor [batch,anchors_num,(dy,dx,dz,dh,dw,dd)]
     :param anchors_tag: torch tensor [batch,anchors_num]  1-正样本，-1-负样本，0-不参与训练
-    :return:
+    :return: loss 标量
     """
     # 获取训练的anchors的索引号
     ix = (anchors_tag == 1).nonzero()  # 只有正样本回归
@@ -45,7 +45,7 @@ def mrcnn_cls_loss(rois_labels, predict_logits):
     mrcnn 分类损失
     :param rois_labels: torch tensor [rois_num]
     :param predict_logits: torch tensor[rois_num,num_classes]
-    :return:
+    :return: loss 标量
     """
     # 转one hot编码
     num_classes = predict_logits.size(1)
@@ -60,7 +60,7 @@ def mrcnn_regress_loss(rois_deltas, predict_deltas, rois_labels):
     :param rois_deltas: torch tensor [rois_num,(dy,dx,dz,dh,dw,dd)]
     :param predict_deltas: torch tensor [rois_num,(dy,dx,dz,dh,dw,dd)]
     :param rois_labels: torch tensor [rois_num]
-    :return:
+    :return: loss 标量
     """
     # 只有正样本计算损失
     ix = (rois_labels > 0).nonzero()[:, 0]  # [pos_rois_num]
@@ -76,7 +76,7 @@ def mrcnn_mask_loss(mask, predict_mask_logits, rois_labels):
     :param mask: 真实的 mask torch tensor [rois_num,y,x,z] 0,1值
     :param predict_mask_logits: torch tensor [rois_num,y,x,z,num_classes]
     :param rois_labels:真实的类别 torch tensor[rois_num]
-    :return:
+    :return: loss 标量
     """
     predict_mask = F.softmax(predict_mask_logits, dim=-1)  # 转为得分
     # 只处正样本区域

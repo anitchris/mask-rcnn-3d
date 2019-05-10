@@ -12,7 +12,7 @@ def generate_base_anchors(scales):
     """
     根据scale尺寸生成3d anchors坐标；默认长宽高尺寸一致
     :param scales: 尺寸列表
-    :return:
+    :return: base_anchors: numpy 数组  [n,(y1,x1,z1,y2,x2,z2)]
     """
     scales = np.array(scales, np.float)  # [n]
     # [n,(y1,x1,z1,y2,x2,z2)]
@@ -23,12 +23,12 @@ def generate_base_anchors(scales):
 def shift(base_anchors, stride, h, w, z):
     """
     在feature map 移动anchors的中心
-    :param base_anchors: [n,(y1,x1,z1,y2,x2,z2)]
-    :param stride: 步长,默认各个维度步长一致
+    :param base_anchors: numpy [n,(y1,x1,z1,y2,x2,z2)]
+    :param stride:  步长,默认各个维度步长一致，数值
     :param h: feature map的高度
     :param w: feature map宽度
     :param z: feature map厚度
-    :return:
+    :return: anchors: [anchors_num,(y1,x1,z1,y2,x2,z2)]
     """
     ctr_x = np.arange(0.5, w) * stride
     ctr_y = np.arange(0.5, h) * stride
@@ -57,7 +57,7 @@ def generate_anchors(scales, stride, h, w, z):
     :param h: feature map的高度
     :param w: feature map宽度
     :param z: feature map厚度
-    :return: 所有的anchors [n,(y1,x1,z1,y2,x2,z2)]
+    :return: anchors: numpy [anchors_num,(y1,x1,z1,y2,x2,z2)]
     """
     base_anchors = generate_base_anchors(scales)
     return shift(base_anchors, stride, h, w, z)
