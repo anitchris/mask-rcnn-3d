@@ -10,100 +10,62 @@ import torch
 from torch import nn
 
 
-class Net(nn.Module):
-    def __init__(self, num_blocks_forw, num_blocks_back):
+class UNet(nn.Module):
+    def __init__(self,
+                 block,
+                 channels=[24, 32, 64, 64, 64],
+                 blocks=[2, 2, 2, 2],
+                 decode_channel=[64, 64, 64, 64, 64],
+                 **kwargs):
         """
-        
-        :param num_blocks_forw: 维度（4,），具体取值[2, 2, 3, 3]
-        :param num_blocks_back: 维度（2,），具体取值[3, 3]
-        """
-        super(Net, self).__init__()
-        self.featureNum_forw = [24, 32, 64, 96, 96]  # 原[24, 32, 64, 64, 64]
-        self.featureNum_back = [128, 64, 96]  # 原[128, 64, 64]
-        self.preBlock = nn.Sequential(
-            nn.Conv3d(1, 24, kernel_size=3, padding=1),
-            nn.BatchNorm3d(24),
-            nn.ReLU(inplace=True),
-            nn.Conv3d(24, 24, kernel_size=3, padding=1),
-            nn.BatchNorm3d(24),
-            nn.ReLU(inplace=True))
-        # 修改的block layers
-        self.forw1 = self._make_layer(num_blocks_forw[0], 0, True)
-        self.forw2 = self._make_layer(num_blocks_forw[1], 1, True)
-        self.forw3 = self._make_layer(num_blocks_forw[2], 2, True)
-        self.forw4 = self._make_layer(num_blocks_forw[3], 3, True)
-        self.back3 = self._make_layer(num_blocks_back[1], 1, False)
-        self.back2 = self._make_layer(num_blocks_back[0], 0, False)
-        # pooling3d
-        self.maxpool1 = nn.MaxPool3d(kernel_size=2, stride=2, return_indices=True)
-        self.maxpool2 = nn.MaxPool3d(kernel_size=2, stride=2, return_indices=True)
-        self.maxpool3 = nn.MaxPool3d(kernel_size=2, stride=2, return_indices=True)
-        self.maxpool4 = nn.MaxPool3d(kernel_size=2, stride=2, return_indices=True)
-        # 上采样layer
-        self.path1 = nn.Sequential(
-            nn.ConvTranspose3d(96, 96, kernel_size=2, stride=2),
-            nn.BatchNorm3d(96),
-            nn.ReLU(inplace=True))
-        self.path2 = nn.Sequential(
-            nn.ConvTranspose3d(64, 64, kernel_size=2, stride=2),
-            nn.BatchNorm3d(64),
-            nn.ReLU(inplace=True))
 
-        # dropout
-        self.drop = nn.Dropout3d(p=0.5, inplace=False)
-
-    def _make_layer(self, num_blocks, inds, is_down):
+        :param block: BasicBlock 或 Bottleneck
+        :param channels: resnet网络的5个stage的输出通道数;
+        :param blocks: resnet网络stage 2~5 的block块数，不同的block块数对应不同的网络层数;
+        :param decode_channel: unet decoder部分输出通道数
+        :param kwargs:
         """
-        指定num_blocks数量的layers结构
-        :param num_blocks: 标量（num_blocks_forw = [2, 2, 3, 3]与featureNum_back = [128, 64, 96]）
-        :param inds: 标量（featureNum_forw与featureNum_back的索引）
-        :param is_down: boolean值（unet下采样部分or上采样部分）
-        :return:
-        """
-        layers = []
-        for i in range(num_blocks):
-            if i == 0:
-                if is_down:
-                    layers.append(Bottleneck(self.featureNum_forw[inds], self.featureNum_forw[inds + 1]))
-                else:
-                    layers.append(Bottleneck(self.featureNum_back[inds + 1] + self.featureNum_forw[inds + 2],
-                                             self.featureNum_back[inds]))
-            else:
-                if is_down:
-                    layers.append(Bottleneck(self.featureNum_forw[inds + 1], self.featureNum_forw[inds + 1]))
-                else:
-                    layers.append(Bottleneck(self.featureNum_back[inds], self.featureNum_back[inds]))
+        super(UNet, self).__init__()
+        c1, c2, c3, c4, c5 = channels  # 通道数
+        dc0, dc1, dc2, dc3, dc4 = decode_channel  # unet解码部分通道数
 
-        return nn.Sequential(*layers)
+        self.bone_net = ResNet(block, channels, blocks, **kwargs)
+        self.up5 = _up(c5, c5)
+        self.up4 = _up(dc4, dc4)
+        self.up3 = _up(dc3, dc3)
+        self.up2 = _up(dc2, dc2)
+        self.up1 = _up(dc1, dc1)
+        # 每个stage上采样合并后,使用一个block块融合特征
+        self.decode_stage4 = _make_stage(block, c5 + c4, dc4, 1)
+        self.decode_stage3 = _make_stage(block, dc4 + c3, dc3, 1)
+        self.decode_stage2 = _make_stage(block, dc3 + c2, dc2, 1)
+        self.decode_stage1 = _make_stage(block, dc2 + c1, dc1, 1)
+        self.decode_stage0 = _make_stage(block, dc1 + 1, dc0, 1)
 
     def forward(self, x):
-        """
-        具体网络结构
-        :param x: [batch, channel, D, H, W]
-        :return: [batch, channel, D, H, W]
-        """
-        # 收缩路径
-        out = self.preBlock(x)  # 16
-        out_pool, indices0 = self.maxpool1(out)
-        out1 = self.forw1(out_pool)  # 32
-        out1_pool, indices1 = self.maxpool2(out1)
-        out2 = self.forw2(out1_pool)  # 64
-        # out2 = self.drop(out2)
-        out2_pool, indices2 = self.maxpool3(out2)
-        out3 = self.forw3(out2_pool)  # 96
-        out3_pool, indices3 = self.maxpool4(out3)
-        out4 = self.forw4(out3_pool)  # 96
-        # out4 = self.drop(out4)
-        # 扩张路径
-        rev3 = self.path1(out4)  # 96，ConvTranspose3d操作并未改变channels数
-        comb3 = self.back3(torch.cat((rev3, out3), 1))  # 96+96 -> back后的64
-        # comb3 = self.drop(comb3)
-        rev2 = self.path2(comb3)  # 64，ConvTranspose3d操作并未改变channels数
-        comb2 = self.back2(torch.cat((rev2, out2), 1))  # 64+64 -> back后的128
-        # rpn_head的基feature_map
-        feature = self.drop(comb2)
+        f5, f4, f3, f2, f1 = self.bone_net(x)
+        p5 = f5
+        up5 = self.up5(p5)
+        comb4 = torch.cat((f4, up5), dim=1)  # [b,2*c5,y,x,z]
+        p4 = self.decode_stage4(comb4)
 
-        return feature
+        up4 = self.up4(p4)
+        comb3 = torch.cat((f3, up4), dim=1)  # [b,dc4 + c4,y,x,z]
+        p3 = self.decode_stage3(comb3)
+
+        up3 = self.up3(p3)
+        comb2 = torch.cat((f2, up3), dim=1)  # [b,dc3 + c3,y,x,z]
+        p2 = self.decode_stage2(comb2)
+
+        up2 = self.up2(p2)
+        comb1 = torch.cat((f1, up2), dim=1)  # [b,dc2 + c2,y,x,z]
+        p1 = self.decode_stage1(comb1)
+
+        up1 = self.up2(p1)
+        comb0 = torch.cat((x, up1), dim=1)  # [b,dc1 + c1,y,x,z]
+        p0 = self.decode_stage0(comb0)
+
+        return p0
 
 
 class ResNet(nn.Module):
@@ -111,6 +73,12 @@ class ResNet(nn.Module):
                  block,
                  channels=[24, 32, 64, 64, 64],
                  blocks=[2, 2, 2, 2]):
+        """
+        resnet 基础网络
+        :param block: BasicBlock 或 Bottleneck
+        :param channels: resnet网络的5个stage的输出通道数;
+        :param blocks: resnet网络stage 2~5 的block块数，不同的block块数对应不同的网络层数;
+        """
         super(ResNet, self).__init__()
         c1, c2, c3, c4, c5 = channels  # 通道数
         b2, b3, b4, b5 = blocks  # 每个stage包含的block数
@@ -129,13 +97,13 @@ class ResNet(nn.Module):
         self.stage5 = _make_stage(block, c4, c5, b5, stride=2)
 
     def forward(self, x):
-        x = self.stage1(x)
-        x = self.stage2(x)
+        x = f1 = self.stage1(x)
+        x = f2 = self.stage2(x)
         x = f3 = self.stage3(x)
         x = f4 = self.stage4(x)
-        x = f5 = self.stage5(x)
+        f5 = self.stage5(x)
 
-        return x, f3, f4, f5
+        return f5, f4, f3, f2, f1
 
 
 class BasicBlock(nn.Module):
@@ -187,11 +155,14 @@ class Bottleneck(nn.Module):
     def __init__(self, in_channels, out_channels, stride=1):
         super(Bottleneck, self).__init__()
         self.base_channels = out_channels // 4  # 输出通道数的4分之一
+
         self.conv1 = nn.Conv3d(in_channels, self.base_channels, kernel_size=1, bias=False)
         self.bn1 = nn.BatchNorm3d(self.base_channels)
+
         self.conv2 = nn.Conv3d(
             self.base_channels, self.base_channels, kernel_size=3, stride=stride, padding=1, bias=False)
         self.bn2 = nn.BatchNorm3d(self.base_channels)
+
         self.conv3 = nn.Conv3d(self.base_channels, out_channels, kernel_size=1, bias=False)
         self.bn3 = nn.BatchNorm3d(out_channels)
         self.relu = nn.ReLU(inplace=True)
@@ -224,6 +195,19 @@ class Bottleneck(nn.Module):
         out = self.relu(out)
 
         return out
+
+
+def _up(in_channels, out_channels):
+    """
+    上采样过程
+    :param in_channels:
+    :param out_channels:
+    :return:
+    """
+    return nn.Sequential(
+        nn.ConvTranspose3d(in_channels, out_channels, kernel_size=2, stride=2),
+        nn.BatchNorm3d(out_channels),
+        nn.ReLU(inplace=True))
 
 
 def _make_stage(block, in_channels, out_channels, num_blocks, stride=1):
@@ -262,7 +246,7 @@ def resnet50(**kwargs):
 
 
 def main():
-    net = resnet50()
+    net = UNet(BasicBlock)
     from torchsummary import summary
 
     summary(net, (1, 32, 32, 32))
