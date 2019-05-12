@@ -106,47 +106,170 @@ class Net(nn.Module):
         return feature
 
 
-class Bottleneck(nn.Module):
-    def __init__(self, n_in, n_out, stride=1):
-        """
-        
-        :param n_in: 标量，输入tensor的channel数
-        :param n_out: 标量，输出tensor的channel数
-        :param stride: 标量
-        """
-        super(Bottleneck, self).__init__()
-        self.conv1 = nn.Conv3d(n_in, n_out, kernel_size=3, stride=stride, padding=1)
-        self.bn1 = nn.BatchNorm3d(n_out)
-        self.relu = nn.ReLU(inplace=True)
-        self.conv2 = nn.Conv3d(n_out, n_out, kernel_size=3, padding=1)
-        self.bn2 = nn.BatchNorm3d(n_out)
+class ResNet(nn.Module):
+    def __init__(self,
+                 block,
+                 channels=[24, 32, 64, 64, 64],
+                 blocks=[2, 2, 2, 2]):
+        super(ResNet, self).__init__()
+        c1, c2, c3, c4, c5 = channels  # 通道数
+        b2, b3, b4, b5 = blocks  # 每个stage包含的block数
+        # 第一个stage 7*7*7的卷积改为两个3*3*3的卷积
+        self.stage1 = nn.Sequential(
+            nn.Conv3d(1, c1, kernel_size=3, padding=1),
+            nn.BatchNorm3d(c1),
+            nn.ReLU(inplace=True),
+            nn.Conv3d(c1, c1, kernel_size=3, padding=1),
+            nn.BatchNorm3d(c1),
+            nn.ReLU(inplace=True),
+            nn.MaxPool3d(kernel_size=(3, 3, 3), stride=2, padding=1))
+        self.stage2 = _make_stage(block, c1, c2, b2, stride=2)
+        self.stage3 = _make_stage(block, c2, c3, b3, stride=2)
+        self.stage4 = _make_stage(block, c3, c4, b4, stride=2)
+        self.stage5 = _make_stage(block, c4, c5, b5, stride=2)
 
-        if stride != 1 or n_out != n_in:
-            self.shortcut = nn.Sequential(
-                nn.Conv3d(n_in, n_out, kernel_size=1, stride=stride),
-                nn.BatchNorm3d(n_out))
-        else:
-            self.shortcut = None
+    def forward(self, x):
+        x = self.stage1(x)
+        x = self.stage2(x)
+        x = f3 = self.stage3(x)
+        x = f4 = self.stage4(x)
+        x = f5 = self.stage5(x)
+
+        return x, f3, f4, f5
+
+
+class BasicBlock(nn.Module):
+    """
+    resnet基础block;包含两层卷积(conv-relu-bn)
+    """
+
+    def __init__(self, in_channels, out_channels, stride=1):
+        super(BasicBlock, self).__init__()
+        self.conv1 = nn.Conv3d(in_channels, out_channels, kernel_size=3,
+                               stride=stride, padding=1, bias=False)
+        self.bn1 = nn.BatchNorm3d(out_channels)
+        self.relu = nn.ReLU(inplace=True)
+        self.conv2 = nn.Conv3d(out_channels, out_channels, kernel_size=3,
+                               padding=1, bias=False)
+        self.bn2 = nn.BatchNorm3d(out_channels)
+        if stride != 1 or in_channels != out_channels:  # 需要下采样的情况
+            self.down_sample = nn.Sequential(nn.Conv3d(
+                in_channels,
+                out_channels,
+                kernel_size=1,
+                stride=stride,
+                bias=False), nn.BatchNorm3d(out_channels))
 
     def forward(self, x):
         residual = x
-        if self.shortcut is not None:
-            residual = self.shortcut(x)
+
         out = self.conv1(x)
         out = self.bn1(out)
         out = self.relu(out)
+
         out = self.conv2(out)
         out = self.bn2(out)
 
+        if hasattr(self, 'down_sample') and self.down_sample is not None:
+            residual = self.down_sample(x)
+
         out += residual
         out = self.relu(out)
+
         return out
 
-# if __name__ == '__main__':
-#     net = Net(3)
-#     from torchsummary import summary
-#
-#     summary(net, (1, 32, 32, 32))
-#     input = torch.randn(2, 1, 32, 32, 32)
-#     out = net(input)
-#     print(out[0].shape, out[1].shape)
+
+class Bottleneck(nn.Module):
+    """
+        resnet bottleneck block;包含三层卷积(conv-relu-bn)
+    """
+
+    def __init__(self, in_channels, out_channels, stride=1):
+        super(Bottleneck, self).__init__()
+        self.base_channels = out_channels // 4  # 输出通道数的4分之一
+        self.conv1 = nn.Conv3d(in_channels, self.base_channels, kernel_size=1, bias=False)
+        self.bn1 = nn.BatchNorm3d(self.base_channels)
+        self.conv2 = nn.Conv3d(
+            self.base_channels, self.base_channels, kernel_size=3, stride=stride, padding=1, bias=False)
+        self.bn2 = nn.BatchNorm3d(self.base_channels)
+        self.conv3 = nn.Conv3d(self.base_channels, out_channels, kernel_size=1, bias=False)
+        self.bn3 = nn.BatchNorm3d(out_channels)
+        self.relu = nn.ReLU(inplace=True)
+        if stride != 1 or in_channels != out_channels:  # 需要下采样的情况
+            self.down_sample = nn.Sequential(nn.Conv3d(
+                in_channels,
+                out_channels,
+                kernel_size=1,
+                stride=stride,
+                bias=False), nn.BatchNorm3d(out_channels))
+
+    def forward(self, x):
+        residual = x
+
+        out = self.conv1(x)
+        out = self.bn1(out)
+        out = self.relu(out)
+
+        out = self.conv2(out)
+        out = self.bn2(out)
+        out = self.relu(out)
+
+        out = self.conv3(out)
+        out = self.bn3(out)
+
+        if hasattr(self, 'down_sample') and self.down_sample is not None:
+            residual = self.down_sample(x)
+
+        out += residual
+        out = self.relu(out)
+
+        return out
+
+
+def _make_stage(block, in_channels, out_channels, num_blocks, stride=1):
+    """
+
+    :param block: BasicBlock 或 Bottleneck
+    :param in_channels:
+    :param out_channels:
+    :param num_blocks: 本层(stage)包含的block块数
+    :param stride: 步长
+    :return:
+    """
+    layers = list([])
+    # 第一层可能有下采样或通道变化
+    layers.append(block(in_channels, out_channels, stride))
+    # 后面每一次输入输出通道都一致
+    for i in range(1, num_blocks):
+        layers.append(block(out_channels, out_channels, 1))
+
+    return nn.Sequential(*layers)
+
+
+def resnet18(**kwargs):
+    model = ResNet(BasicBlock, [24, 32, 64, 64, 64], [2, 2, 2, 2], **kwargs)
+    return model
+
+
+def resnet34(**kwargs):
+    model = ResNet(BasicBlock, [24, 32, 64, 64, 64], [3, 4, 6, 3], **kwargs)
+    return model
+
+
+def resnet50(**kwargs):
+    model = ResNet(Bottleneck, [24, 32, 64, 64, 64], [3, 4, 6, 3], **kwargs)
+    return model
+
+
+def main():
+    net = resnet50()
+    from torchsummary import summary
+
+    summary(net, (1, 32, 32, 32))
+    inputs = torch.randn(2, 1, 32, 32, 32)
+    out = net(inputs)
+    print(out[0].shape, out[1].shape)
+
+
+if __name__ == '__main__':
+    main()
