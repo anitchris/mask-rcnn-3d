@@ -53,16 +53,16 @@ class LungNet(nn.Module):
         feature_map = self.base_net(x)
         # 获取rpn的输出
         rpn_output = self.rpn_head(feature_map)
-        predict_scores, predict_deltas = rpn_output[:, :, -1], rpn_output[:, :, :-1]
+        predict_logits, predict_deltas = rpn_output[:, :, -1], rpn_output[:, :, :-1]
         # 获取anchors的真实类别和真实偏移量
         gt_anchors_tag, gt_anchors_deltas = self.rpn_target(self.anchors, gt_boxes, gt_labels)
 
         # 计算rpn阶段loss
-        cls_loss_rpn = rpn_cls_loss(gt_anchors_tag, predict_scores)
+        cls_loss_rpn = rpn_cls_loss(gt_anchors_tag, predict_logits)
         regr_loss_rpn = rpn_regress_loss(gt_anchors_deltas, predict_deltas, gt_anchors_tag)
 
         # 获取proposals
-        batch_proposals, batch_scores, batch_indices = self.proposal(self.anchors, predict_scores, predict_deltas)
+        batch_proposals, batch_scores, batch_indices = self.proposal(self.anchors, predict_logits, predict_deltas)
         # 获取mrcnn target
         batch_rois, gt_deltas, gt_labels, gt_masks, rois_indices = self.mrcnn_traget(batch_proposals, batch_indices,
                                                                                      gt_boxes, gt_labels)

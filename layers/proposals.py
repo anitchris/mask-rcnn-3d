@@ -7,6 +7,7 @@
 """
 import torch
 from torch import nn
+import torch.nn.functional as F
 from utils.torch_utils import apply_regress_3d, nms_3d
 
 
@@ -18,10 +19,10 @@ class Proposal(nn.Module):
         self.min_score = min_score
         super(Proposal, self).__init__()
 
-    def forward(self, anchors, predict_scores, predict_deltas):
+    def forward(self, anchors, predict_logits, predict_deltas):
         """
         :param anchors: torch tensor [anchors_num,(y1,x1,z1,y2,x2,z2)]
-        :param predict_scores: torch tensor [batch,anchors_num]
+        :param predict_logits: torch tensor [batch,anchors_num]
         :param predict_deltas: torch tensor [batch,anchors_num,(dx,dy,dz,dh,dw,dd)]
         :return: batch_proposals: proposals边框坐标[proposals_num,(y1,x1,z1,y2,x2,z2)]
         :return: batch_scores: proposals边框得分[proposals_num]
@@ -32,7 +33,9 @@ class Proposal(nn.Module):
         batch_scores = []
         batch_indices = []
         # 逐个样本处理
+        predict_scores = nn.functional.sigmoid(predict_logits)  # logits 转为 scores
         batch_size = predict_scores.shape[0]
+
         for bix in range(batch_size):
             # nms之前保留得分最高topn
             scores, order = torch.sort(predict_scores[bix], descending=True)
