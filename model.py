@@ -6,14 +6,14 @@
    Date:          2019/5/10
 """
 from torch import nn
-from layers.base_net import Net
+from layers.base_net import UNet
 from layers.net_head import RpnHead, MrcnnHead
 from layers.anchors import generate_anchors
 from layers.proposals import Proposal
 from layers.target import RpnTarget, MrcnnTarget
 from layers.roialign import RoiAlign
 from layers.losses import rpn_cls_loss, rpn_regress_loss, mrcnn_cls_loss, mrcnn_regress_loss, mrcnn_mask_loss
-from config import cur_config as cfg
+from config import cur_config as config
 
 
 class LungNet(nn.Module):
@@ -23,17 +23,21 @@ class LungNet(nn.Module):
         :param phase: "train" or "test"
         """
         super(LungNet, self).__init__()
-        self.cfg = cfg
         self.phase = phase
-        self.base_net = Net(cfg.NUM_BLOCKS_FORW, self.NUM_BLOCKS_BACK)
-        self.rpn_head = RpnHead(cfg.NUM_ANCHORS)
-        self.mrcnn_head = MrcnnHead(cfg)
-        self.anchors = generate_anchors(cfg.SCALES, cfg.STRIDE, cfg.HEIGHT,
-                                        cfg.WEIGHT, cfg.DEPTH)
-        self.proposal = Proposal(cfg.PRE_NMS_LIMIT, cfg.NMS_THRESHOLD, cfg.MAX_OUTPUT_NUM)
-        self.mrcnn_traget = MrcnnTarget(cfg.TRAIN_ROIS_PER_IMAGE)
+        self.base_net = UNet()
+        self.rpn_head = RpnHead(config.NUM_ANCHORS)
+        self.mrcnn_head = MrcnnHead(in_channel=64)
+        self.anchors = generate_anchors(config.ANCHOR_SCALES,
+                                        config.STRIDE,
+                                        config.FEATURES_HEIGHT,
+                                        config.FEATURES_WIDTH,
+                                        config.FEATURES_DEPTH)
+        max_output_num = config.POST_NMS_ROIS_TRAINING if phase == 'train' else config.POST_NMS_ROIS_INFERENCE
+        self.proposal = Proposal(config.PRE_NMS_LIMIT, config.RPN_NMS_THRESHOLD, max_output_num)
+        self.mrcnn_traget = MrcnnTarget(config.TRAIN_ROIS_PER_IMAGE)
         self.rpn_target = RpnTarget()
-        self.roi_align = RoiAlign(cfg.POOL_SIZE_H, self.POOL_SIZE_T, self.POOL_SIZE_T, cfg.IMAGE_SIZE)
+        self.roi_align = RoiAlign(config.POOL_SIZE_HEIGHT, config.POOL_SIZE_WIDTH, config.POOL_SIZE_DEPTH,
+                                  config.IMAGE_SIZE)
 
     def forward(self, x, gt_boxes, gt_labels):
         """

@@ -10,102 +10,6 @@ import torch
 from torch import nn
 
 
-class UNet(nn.Module):
-    def __init__(self,
-                 block,
-                 channels=[24, 32, 64, 64, 64],
-                 blocks=[2, 2, 2, 2],
-                 decode_channel=[64, 64, 64, 64, 64],
-                 **kwargs):
-        """
-
-        :param block: BasicBlock 或 Bottleneck
-        :param channels: resnet网络的5个stage的输出通道数;
-        :param blocks: resnet网络stage 2~5 的block块数，不同的block块数对应不同的网络层数;
-        :param decode_channel: unet decoder部分输出通道数
-        :param kwargs:
-        """
-        super(UNet, self).__init__()
-        c1, c2, c3, c4, c5 = channels  # 通道数
-        dc0, dc1, dc2, dc3, dc4 = decode_channel  # unet解码部分通道数
-
-        self.bone_net = ResNet(block, channels, blocks, **kwargs)
-        self.up5 = _up(c5, c5)
-        self.up4 = _up(dc4, dc4)
-        self.up3 = _up(dc3, dc3)
-        self.up2 = _up(dc2, dc2)
-        self.up1 = _up(dc1, dc1)
-        # 每个stage上采样合并后,使用一个block块融合特征
-        self.decode_stage4 = _make_stage(block, c5 + c4, dc4, 1)
-        self.decode_stage3 = _make_stage(block, dc4 + c3, dc3, 1)
-        self.decode_stage2 = _make_stage(block, dc3 + c2, dc2, 1)
-        self.decode_stage1 = _make_stage(block, dc2 + c1, dc1, 1)
-        self.decode_stage0 = _make_stage(block, dc1 + 1, dc0, 1)
-
-    def forward(self, x):
-        f5, f4, f3, f2, f1 = self.bone_net(x)
-        p5 = f5
-        up5 = self.up5(p5)
-        comb4 = torch.cat((f4, up5), dim=1)  # [b,2*c5,y,x,z]
-        p4 = self.decode_stage4(comb4)
-
-        up4 = self.up4(p4)
-        comb3 = torch.cat((f3, up4), dim=1)  # [b,dc4 + c4,y,x,z]
-        p3 = self.decode_stage3(comb3)
-
-        up3 = self.up3(p3)
-        comb2 = torch.cat((f2, up3), dim=1)  # [b,dc3 + c3,y,x,z]
-        p2 = self.decode_stage2(comb2)
-
-        up2 = self.up2(p2)
-        comb1 = torch.cat((f1, up2), dim=1)  # [b,dc2 + c2,y,x,z]
-        p1 = self.decode_stage1(comb1)
-
-        up1 = self.up2(p1)
-        comb0 = torch.cat((x, up1), dim=1)  # [b,dc1 + c1,y,x,z]
-        p0 = self.decode_stage0(comb0)
-
-        return p0
-
-
-class ResNet(nn.Module):
-    def __init__(self,
-                 block,
-                 channels=[24, 32, 64, 64, 64],
-                 blocks=[2, 2, 2, 2]):
-        """
-        resnet 基础网络
-        :param block: BasicBlock 或 Bottleneck
-        :param channels: resnet网络的5个stage的输出通道数;
-        :param blocks: resnet网络stage 2~5 的block块数，不同的block块数对应不同的网络层数;
-        """
-        super(ResNet, self).__init__()
-        c1, c2, c3, c4, c5 = channels  # 通道数
-        b2, b3, b4, b5 = blocks  # 每个stage包含的block数
-        # 第一个stage 7*7*7的卷积改为两个3*3*3的卷积
-        self.stage1 = nn.Sequential(
-            nn.Conv3d(1, c1, kernel_size=3, padding=1),
-            nn.BatchNorm3d(c1),
-            nn.ReLU(inplace=True),
-            nn.Conv3d(c1, c1, kernel_size=3, padding=1),
-            nn.BatchNorm3d(c1),
-            nn.ReLU(inplace=True),
-            nn.MaxPool3d(kernel_size=(3, 3, 3), stride=2, padding=1))
-        self.stage2 = _make_stage(block, c1, c2, b2, stride=2)
-        self.stage3 = _make_stage(block, c2, c3, b3, stride=2)
-        self.stage4 = _make_stage(block, c3, c4, b4, stride=2)
-        self.stage5 = _make_stage(block, c4, c5, b5, stride=2)
-
-    def forward(self, x):
-        x = f1 = self.stage1(x)
-        x = f2 = self.stage2(x)
-        x = f3 = self.stage3(x)
-        x = f4 = self.stage4(x)
-        f5 = self.stage5(x)
-
-        return f5, f4, f3, f2, f1
-
-
 class BasicBlock(nn.Module):
     """
     resnet基础block;包含两层卷积(conv-relu-bn)
@@ -195,6 +99,102 @@ class Bottleneck(nn.Module):
         out = self.relu(out)
 
         return out
+
+
+class UNet(nn.Module):
+    def __init__(self,
+                 block=BasicBlock,
+                 channels=[24, 32, 64, 64, 64],
+                 blocks=[2, 2, 2, 2],
+                 decode_channel=[64, 64, 64, 64, 64],
+                 **kwargs):
+        """
+
+        :param block: BasicBlock 或 Bottleneck
+        :param channels: resnet网络的5个stage的输出通道数;
+        :param blocks: resnet网络stage 2~5 的block块数，不同的block块数对应不同的网络层数;
+        :param decode_channel: unet decoder部分输出通道数
+        :param kwargs:
+        """
+        super(UNet, self).__init__()
+        c1, c2, c3, c4, c5 = channels  # 通道数
+        dc0, dc1, dc2, dc3, dc4 = decode_channel  # unet解码部分通道数
+
+        self.bone_net = ResNet(block, channels, blocks, **kwargs)
+        self.up5 = _up(c5, c5)
+        self.up4 = _up(dc4, dc4)
+        self.up3 = _up(dc3, dc3)
+        self.up2 = _up(dc2, dc2)
+        self.up1 = _up(dc1, dc1)
+        # 每个stage上采样合并后,使用一个block块融合特征
+        self.decode_stage4 = _make_stage(block, c5 + c4, dc4, 1)
+        self.decode_stage3 = _make_stage(block, dc4 + c3, dc3, 1)
+        self.decode_stage2 = _make_stage(block, dc3 + c2, dc2, 1)
+        self.decode_stage1 = _make_stage(block, dc2 + c1, dc1, 1)
+        self.decode_stage0 = _make_stage(block, dc1 + 1, dc0, 1)
+
+    def forward(self, x):
+        f5, f4, f3, f2, f1 = self.bone_net(x)
+        p5 = f5
+        up5 = self.up5(p5)
+        comb4 = torch.cat((f4, up5), dim=1)  # [b,c5 + c4,y,x,z]
+        p4 = self.decode_stage4(comb4)
+
+        up4 = self.up4(p4)
+        comb3 = torch.cat((f3, up4), dim=1)  # [b,dc4 + c3,y,x,z]
+        p3 = self.decode_stage3(comb3)
+
+        up3 = self.up3(p3)
+        comb2 = torch.cat((f2, up3), dim=1)  # [b,dc3 + c2,y,x,z]
+        p2 = self.decode_stage2(comb2)
+
+        up2 = self.up2(p2)
+        comb1 = torch.cat((f1, up2), dim=1)  # [b,dc2 + c1,y,x,z]
+        p1 = self.decode_stage1(comb1)
+
+        up1 = self.up2(p1)
+        comb0 = torch.cat((x, up1), dim=1)  # [b,dc1 + 1,y,x,z]
+        p0 = self.decode_stage0(comb0)
+
+        return p0
+
+
+class ResNet(nn.Module):
+    def __init__(self,
+                 block,
+                 channels=[24, 32, 64, 64, 64],
+                 blocks=[2, 2, 2, 2]):
+        """
+        resnet 基础网络
+        :param block: BasicBlock 或 Bottleneck
+        :param channels: resnet网络的5个stage的输出通道数;
+        :param blocks: resnet网络stage 2~5 的block块数，不同的block块数对应不同的网络层数;
+        """
+        super(ResNet, self).__init__()
+        c1, c2, c3, c4, c5 = channels  # 通道数
+        b2, b3, b4, b5 = blocks  # 每个stage包含的block数
+        # 第一个stage 7*7*7的卷积改为两个3*3*3的卷积
+        self.stage1 = nn.Sequential(
+            nn.Conv3d(1, c1, kernel_size=3, padding=1),
+            nn.BatchNorm3d(c1),
+            nn.ReLU(inplace=True),
+            nn.Conv3d(c1, c1, kernel_size=3, padding=1),
+            nn.BatchNorm3d(c1),
+            nn.ReLU(inplace=True),
+            nn.MaxPool3d(kernel_size=(3, 3, 3), stride=2, padding=1))
+        self.stage2 = _make_stage(block, c1, c2, b2, stride=2)
+        self.stage3 = _make_stage(block, c2, c3, b3, stride=2)
+        self.stage4 = _make_stage(block, c3, c4, b4, stride=2)
+        self.stage5 = _make_stage(block, c4, c5, b5, stride=2)
+
+    def forward(self, x):
+        x = f1 = self.stage1(x)
+        x = f2 = self.stage2(x)
+        x = f3 = self.stage3(x)
+        x = f4 = self.stage4(x)
+        f5 = self.stage5(x)
+
+        return f5, f4, f3, f2, f1
 
 
 def _up(in_channels, out_channels):
