@@ -39,50 +39,73 @@ class LungNet(nn.Module):
         self.roi_align = RoiAlign(config.POOL_SIZE_HEIGHT, config.POOL_SIZE_WIDTH, config.POOL_SIZE_DEPTH,
                                   config.IMAGE_SIZE)
 
-    def forward(self, x, gt_boxes, gt_labels):
+    def forward(self, x, gt_boxes=None, gt_labels=None, gt_masks=None):
         """
         前向传播
-        :param x: tensor, [Batch, Channel, D, H, W]
+        :param x: tensor, [Batch, Channel, H, W, D]
         :param gt_boxes: list of numpy [n,(y1,x1,z1,y2,x2,z2)]
         :param gt_labels: list of numpy [n]
+        :param gt_masks: numpy [n,H, W, D]
         :return: dict
         """
         outputs = {}
 
+        # ### 网络输入、处理过程、输出
         # 获取feature map
         feature_map = self.base_net(x)
         # 获取rpn的输出
         rpn_output = self.rpn_head(feature_map)
         predict_logits, predict_deltas = rpn_output[:, :, -1], rpn_output[:, :, :-1]
-        # 获取anchors的真实类别和真实偏移量
-        gt_anchors_tag, gt_anchors_deltas = self.rpn_target(self.anchors, gt_boxes, gt_labels)
-
-        # 计算rpn阶段loss
-        cls_loss_rpn = rpn_cls_loss(gt_anchors_tag, predict_logits)
-        regr_loss_rpn = rpn_regress_loss(gt_anchors_deltas, predict_deltas, gt_anchors_tag)
 
         # 获取proposals
         batch_proposals, batch_scores, batch_indices = self.proposal(self.anchors, predict_logits, predict_deltas)
-        # 获取mrcnn target
-        batch_rois, gt_deltas, gt_labels, gt_masks, rois_indices = self.mrcnn_traget(batch_proposals, batch_indices,
-                                                                                     gt_boxes, gt_labels)
-        # roi align
-        rois = self.roi_align(feature_map, batch_rois, rois_indices)
 
-        # 获取mrcnn head输出
-        predict_mrcnn_cls, predict_mrcnn_regr, predict_mask = self.mrcnn_head(rois)
+        if self.phase == 'train':
+            # 获取mrcnn target
+            batch_rois, mrcnn_deltas, mrcnn_labels, mrcnn_masks, rois_indices = self.mrcnn_traget(batch_proposals,
+                                                                                                  batch_indices,
+                                                                                                  gt_boxes, gt_labels,
+                                                                                                  gt_masks)
+            # roi align
+            rois = self.roi_align(feature_map, batch_rois, rois_indices)
+            # 获取mrcnn head输出
+            predict_mrcnn_cls, predict_mrcnn_deltas, predict_mask = self.mrcnn_head(rois)
+            #   ### 以下计算loss
+            # 获取anchors的真实类别和真实偏移量
+            gt_anchors_tag, gt_anchors_deltas = self.rpn_target(self.anchors, gt_boxes, gt_labels)
+            # 计算rpn阶段loss
+            cls_loss_rpn = rpn_cls_loss(gt_anchors_tag, predict_logits)
+            regr_loss_rpn = rpn_regress_loss(gt_anchors_deltas, predict_deltas, gt_anchors_tag)
+            # 计算mrcnn阶段loss
+            cls_loss_mrcnn = mrcnn_cls_loss(mrcnn_labels, predict_mrcnn_cls)
+            regr_loss_mrcnn = mrcnn_regress_loss(mrcnn_deltas, predict_mrcnn_deltas, mrcnn_labels)
+            mask_loss = mrcnn_mask_loss(mrcnn_masks, predict_mask, mrcnn_labels)
 
-        # 计算mrcnn阶段loss
-        cls_loss_mrcnn = mrcnn_cls_loss(gt_labels, predict_mrcnn_cls)
-        regr_loss_mrcnn = mrcnn_regress_loss(gt_deltas, predict_mrcnn_regr, gt_labels)
-        mask_loss = mrcnn_mask_loss(gt_masks, predict_mask, gt_labels)
+            # 总的Loss
+            total_loss = cls_loss_rpn + regr_loss_rpn + cls_loss_mrcnn + regr_loss_mrcnn + mask_loss
+            outputs['loss'] = total_loss
 
-        # 总的Loss
-        total_loss = cls_loss_rpn + regr_loss_rpn + cls_loss_mrcnn + regr_loss_mrcnn + mask_loss
+        else:  #
+            # roi align
+            rois = self.roi_align(feature_map, batch_proposals, batch_indices)
+            # 获取mrcnn head输出
+            predict_mrcnn_cls, predict_mrcnn_deltas, predict_mask = self.mrcnn_head(rois)
+            # todo: 还原检测框和预测的mask
 
-        if self.phase == 'test':
-            # todo: 预测过程
-            pass
-
-        outputs['loss'] = total_loss
         return outputs
+
+
+def main():
+    net = LungNet(phase='test')
+
+    from torchsummary import summary
+
+    summary(net, (1, 32, 32, 32))
+    import torch
+    inputs = torch.randn(2, 1, 32, 32, 32)
+    out = net(inputs)
+    print("output:{}".format(out))
+
+
+if __name__ == '__main__':
+    main()
