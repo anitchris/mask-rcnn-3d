@@ -10,7 +10,6 @@ import os
 import torch
 import numpy as np
 import torch.utils.data
-from torch.nn import DataParallel
 from torch.autograd import Variable
 from torch.utils.data import Dataset
 from torch.utils.data import DataLoader
@@ -18,11 +17,11 @@ from config import cur_config as cfg
 
 
 class Data3Lung(Dataset):  # Dataset是一个包装类，用来将数据包装为Dataset类，方便传入DataLoader中（getitem与len方法一般不可少）
-    def __init__(self, data_dir, config, phase='train'):
+    def __init__(self, data_dir, crop, phase='train'):
         """
         所有患者img、mask、gt的数据初始化
         :param data_dir: subset地址
-        :param config: 配置文件
+        :param crop: Crop对象
         :param phase: 
         """
         assert (phase == 'train' or phase == 'val' or phase == 'test')
@@ -53,7 +52,7 @@ class Data3Lung(Dataset):  # Dataset是一个包装类，用来将数据包装�
         self.gts = np.array(gts)
         self.is_random_img = False  # 随机患者or指定患者
         # 先创建crop对象作为self变量
-        self.crop = Crop(config)
+        self.crop = crop
 
     def __getitem__(self, idx):  # getitem方法支持从0到len(self)的索引，方便于按照索引加载数据
         """
@@ -82,9 +81,11 @@ class Data3Lung(Dataset):  # Dataset是一个包装类，用来将数据包装�
             # crop得到样本
             sample, sam_mask, sam_gt, sam_label = self.crop(img, mask, gt)
             # augment先不管
-            return torch.from_numpy(sample.astype(np.float32)), torch.from_numpy(
-                sam_mask.astype(np.float32)), torch.from_numpy(sam_gt.astype(np.float32)), torch.from_numpy(
-                sam_label.astype(np.float32))
+            # return torch.from_numpy(sample.astype(np.float32)), torch.from_numpy(
+            #     sam_mask.astype(np.float32)), torch.from_numpy(sam_gt.astype(np.float32)), torch.from_numpy(
+            #     sam_label.astype(np.float32))
+            return torch.from_numpy(sample.astype(np.float32)), sam_gt, sam_label, sam_mask
+
         else:  # 测试阶段（待完成）
             img = self.imgs[idx]
             mask = self.masks[idx]
@@ -104,11 +105,18 @@ class Data3Lung(Dataset):  # Dataset是一个包装类，用来将数据包装�
 
 # crop操作类
 class Crop(object):
-    def __init__(self, config):
-        self.crop_size = config.CROP_SIZE
-        self.bound_size = config.BOUND_SIZE
-        self.stride = config.STRIDE
-        self.pad_value = config.PAD_VALUE
+    def __init__(self, crop_size, bound_size, stride, pad_value):
+        """
+
+        :param crop_size: 裁剪尺寸
+        :param bound_size:
+        :param stride: 步长
+        :param pad_value: padding 填充
+        """
+        self.crop_size = crop_size
+        self.bound_size = bound_size
+        self.stride = stride
+        self.pad_value = pad_value
         super(Crop, self).__init__()
 
     def __call__(self, img, mask, gt):
@@ -199,10 +207,14 @@ def main():
     :return: 
     """
     data_dir = 'F:\迅雷下载\dicom文件-标记文件\subset'
+    crop = Crop(cfg.CROP_SIZE,
+                cfg.BOUND_SIZE,
+                cfg.STRIDE,
+                cfg.PAD_VALUE)
     # 数据包装
     dataset = Data3Lung(
         data_dir,
-        cfg,
+        crop,
         phase='train')
     # 传入DataLoader
     train_loader = DataLoader(
