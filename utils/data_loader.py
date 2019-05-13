@@ -81,10 +81,7 @@ class Data3Lung(Dataset):  # Dataset是一个包装类，用来将数据包装�
             # crop得到样本
             sample, sam_mask, sam_gt, sam_label = self.crop(img, mask, gt)
             # augment先不管
-            # return torch.from_numpy(sample.astype(np.float32)), torch.from_numpy(
-            #     sam_mask.astype(np.float32)), torch.from_numpy(sam_gt.astype(np.float32)), torch.from_numpy(
-            #     sam_label.astype(np.float32))
-            return torch.from_numpy(sample.astype(np.float32)), sam_gt, sam_label, sam_mask
+            return sample, sam_gt, sam_label, sam_mask
 
         else:  # 测试阶段（待完成）
             img = self.imgs[idx]

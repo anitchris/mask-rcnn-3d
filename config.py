@@ -35,7 +35,9 @@ class Config(object):
     MASK_POOL_SIZE = 28
     TRAIN_ROIS_PER_IMAGE = 64
 
+    # 训练参数
     BATCH_SIZE = 1
+    EPOCHS = 50
 
     def __init__(self):
         super(Config, self).__init__()
