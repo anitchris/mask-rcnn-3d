@@ -198,6 +198,45 @@ class Crop(object):
         return patch_img, patch_mask, target_box, patch_label
 
 
+class CustomLoader(object):
+    """
+    自定义数据加载器，没有使用原生的torch.utils.data.DataLoader;因为数据加载返回的有tensor也有python的list对象
+    """
+
+    def __init__(self, dataset, batch_size=1, shuffle=True):
+        """
+
+        :param dataset: Data3Lung DataSet对象
+        :param batch_size: batch_size
+        :param shuffle:
+        """
+        self.dataset = dataset
+        self.batch_size = batch_size
+        self.shuffle = shuffle
+        self.indices = np.arange(self.__len__())
+        if self.shuffle:
+            np.random.shuffle(self.indices)
+        self.indices = np.reshape((len(self.indices) // self.batch_size, batch_size))
+
+    def __iter__(self):
+        return iter(self.indices)
+
+    def __next__(self):
+        cur_indices = next(self.__iter__())
+        batch_images, batch_gt_boxes, batch_labels, batch_masks = [], [], [], []
+        for idx in cur_indices:
+            image, gt_boxes, labels, mask = self.dataset[idx]
+            batch_images.append(image)
+            batch_gt_boxes.append(gt_boxes)
+            batch_labels.append(labels)
+            batch_masks.append(mask)
+        batch_images = torch.from_numpy(np.stack(batch_images, axis=0))
+        return batch_images, batch_gt_boxes, batch_labels, batch_masks
+
+    def __len__(self):
+        return len(self.dataset)
+
+
 def main():
     """
     测试类
